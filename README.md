@@ -124,6 +124,16 @@ uv run python model_lab/scripts/finetune_qwen_lora.py \
   --output model_lab/models/qwen-job-keyword-lora
 ```
 
+To prove QLoRA helps, use the model-lab eval harness to compare pure
+`Qwen/Qwen3-8B`, `gpt-5-mini`, and later your QLoRA adapter on the same test
+split:
+
+```bash
+uv run python model_lab/scripts/split_qwen_dataset.py
+uv run python model_lab/scripts/evaluate_skill_extractors.py --provider openai --openai-model gpt-5-mini --run-name gpt-5-mini
+uv run python model_lab/scripts/render_eval_report.py model_lab/eval_runs/*.metrics.json --output model_lab/eval_runs/report.html
+```
+
 ## License
 
 [MIT](./LICENSE)

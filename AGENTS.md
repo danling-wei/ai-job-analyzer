@@ -95,7 +95,10 @@ ai-job-analyzer/
 │   │   └── qwen_skill_train.example.jsonl
 │   ├── scripts/
 │   │   ├── collect_qwen_seed_postings.py
+│   │   ├── evaluate_skill_extractors.py
 │   │   ├── generate_qwen_training_data.py
+│   │   ├── render_eval_report.py
+│   │   ├── split_qwen_dataset.py
 │   │   └── finetune_qwen_lora.py
 │   ├── server/
 │   │   └── qwen_service.py  # standalone FastAPI model service
@@ -184,6 +187,10 @@ non-streaming `POST /analyze`).
   `QWEN_ADAPTER_PATH`.
   The default base model is `Qwen/Qwen3-8B`; QLoRA training is the default path
   in `model_lab/scripts/finetune_qwen_lora.py`.
+  Evaluation scripts under `model_lab/scripts/` can split the generated dataset,
+  run pure Qwen3 8B / GPT-5 mini / later QLoRA against the same test set, and
+  render an HTML comparison report with skill precision, recall, F1, and a
+  deterministic faithfulness proxy.
   `QwenServiceExtractor` sends postings to Qwen in small batches
   (`QWEN_SERVICE_BATCH_SIZE`, normally `1`) and treats Qwen as the high-volume
   skill extractor. Final low-volume cleanup is controlled by

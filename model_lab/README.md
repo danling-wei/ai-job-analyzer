@@ -79,6 +79,56 @@ uv run python model_lab/scripts/finetune_qwen_lora.py \
   --base-model Qwen/Qwen3-8B
 ```
 
+## Evaluate Base Qwen, GPT-5 Mini, And QLoRA
+
+Create a stable split:
+
+```bash
+uv run python model_lab/scripts/split_qwen_dataset.py \
+  --input model_lab/data/qwen_skill_train.generated.jsonl
+```
+
+Run pure Qwen3 8B first. Start the Qwen service with no adapter:
+
+```bash
+QWEN_BASE_MODEL=Qwen/Qwen3-8B QWEN_ADAPTER_PATH= uv run ai-job-analyzer serve-qwen
+```
+
+Then evaluate:
+
+```bash
+uv run python model_lab/scripts/evaluate_skill_extractors.py \
+  --dataset model_lab/data/eval/test.jsonl \
+  --provider qwen_service \
+  --run-name qwen3-8b-base \
+  --qwen-model-name Qwen/Qwen3-8B
+```
+
+Evaluate GPT-5 mini on the same split:
+
+```bash
+uv run python model_lab/scripts/evaluate_skill_extractors.py \
+  --dataset model_lab/data/eval/test.jsonl \
+  --provider openai \
+  --openai-model gpt-5-mini \
+  --run-name gpt-5-mini
+```
+
+After QLoRA, restart the Qwen service with `QWEN_ADAPTER_PATH` set and run the
+same command with `--run-name qwen3-8b-qlora`.
+
+Render a visual report:
+
+```bash
+uv run python model_lab/scripts/render_eval_report.py \
+  model_lab/eval_runs/qwen3-8b-base.metrics.json \
+  model_lab/eval_runs/gpt-5-mini.metrics.json \
+  --output model_lab/eval_runs/report.html
+```
+
+The report compares skill precision, recall, F1, and a deterministic
+faithfulness proxy against the GPT-teacher labels.
+
 ## Run Qwen As A Separate Service
 
 Terminal 1:
