@@ -225,4 +225,10 @@ frontend/.next/
 frontend/out/
 model_lab/models/*
 !model_lab/models/.gitkeep
+model_lab/data/*.generated.jsonl
+model_lab/data/*.generated.progress.txt
+model_lab/data/*.runner.log
+model_lab/data/*.runner.log.err
+model_lab/data/*.backfill_zero.progress.txt
+model_lab/data/teacher_shards/
 

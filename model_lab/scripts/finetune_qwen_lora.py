@@ -1,4 +1,4 @@
-"""Fine-tune a small Qwen instruct model with LoRA for skill extraction.
+"""Fine-tune a Qwen instruct model with QLoRA/LoRA for skill extraction.
 
 Run from the repository root:
 
@@ -42,10 +42,7 @@ def _format_example(row: dict[str, Any]) -> dict[str, str]:
     output = row.get("output")
     if not isinstance(output, dict):
         raise ValueError("Each row must include an output object.")
-    user = (
-        f"Target role: {row.get('job_title', 'Unknown')}\n\n"
-        f"Postings:\n\n{chr(10).join(chunks)}"
-    )
+    user = f"Target role: {row.get('job_title', 'Unknown')}\n\nPostings:\n\n{chr(10).join(chunks)}"
     assistant = json.dumps(output, ensure_ascii=False)
     return {"system": SYSTEM_PROMPT, "user": user, "assistant": assistant}
 
@@ -54,17 +51,24 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--train", required=True, help="Training JSONL path.")
     parser.add_argument("--output", required=True, help="LoRA adapter output directory.")
-    parser.add_argument("--base-model", default="Qwen/Qwen2.5-1.5B-Instruct")
+    parser.add_argument("--base-model", default="Qwen/Qwen3-8B")
     parser.add_argument("--epochs", type=float, default=2.0)
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--grad-accum", type=int, default=8)
     parser.add_argument("--max-seq-length", type=int, default=4096)
+    parser.add_argument(
+        "--qlora",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Load the base model in 4-bit NF4 and train LoRA adapters.",
+    )
     args = parser.parse_args()
 
+    import torch
     from datasets import Dataset
-    from peft import LoraConfig
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from peft import LoraConfig, prepare_model_for_kbit_training
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from trl import SFTConfig, SFTTrainer
 
     rows = [
@@ -91,11 +95,17 @@ def main() -> None:
         }
 
     dataset = dataset.map(to_text)
-    model = AutoModelForCausalLM.from_pretrained(
-        args.base_model,
-        device_map="auto",
-        torch_dtype="auto",
-    )
+    model_kwargs: dict[str, Any] = {"device_map": "auto", "torch_dtype": "auto"}
+    if args.qlora:
+        model_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+    model = AutoModelForCausalLM.from_pretrained(args.base_model, **model_kwargs)
+    if args.qlora:
+        model = prepare_model_for_kbit_training(model)
     lora = LoraConfig(
         r=16,
         lora_alpha=32,

@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     # still does per-posting extraction; this provider can do final skill
     # canonicalization and narrative synthesis.
     finalizer_provider: Literal["qwen_service", "openai", "mock"] = "qwen_service"
-    finalizer_model: str = "gpt-5.5"
+    finalizer_model: str = "gpt-5.2"
     finalizer_temperature: float = 0.0
 
     openai_api_key: str | None = None
@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
 
     # ---- Local Qwen LoRA extraction ---------------------------------------
-    qwen_base_model: str = "Qwen/Qwen2.5-1.5B-Instruct"
+    qwen_base_model: str = "Qwen/Qwen3-8B"
     qwen_adapter_path: str | None = None
     qwen_device_map: str = "auto"
     qwen_torch_dtype: Literal["auto", "float16", "bfloat16", "float32"] = "auto"

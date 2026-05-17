@@ -97,6 +97,33 @@ uv run ai-job-analyzer serve-qwen
 LLM_PROVIDER=qwen_service FINALIZER_PROVIDER=openai uv run ai-job-analyzer serve --reload
 ```
 
+Qwen fine-tuning defaults to `Qwen/Qwen3-8B`. To generate supervised training
+labels, first collect unlabeled seed postings:
+
+```bash
+uv run python model_lab/scripts/collect_qwen_seed_postings.py \
+  --output model_lab/data/qwen_skill_seed.generated.jsonl \
+  --source serpapi \
+  --per-role 100
+```
+
+Then label them with the closed-source OpenAI teacher model:
+
+```bash
+uv run python model_lab/scripts/generate_qwen_training_data.py \
+  --input model_lab/data/qwen_skill_seed.generated.jsonl \
+  --output model_lab/data/qwen_skill_train.generated.jsonl \
+  --model gpt-5.2
+```
+
+Then fine-tune with QLoRA:
+
+```bash
+uv run python model_lab/scripts/finetune_qwen_lora.py \
+  --train model_lab/data/qwen_skill_train.generated.jsonl \
+  --output model_lab/models/qwen-job-keyword-lora
+```
+
 ## License
 
-[Apache 2.0](./LICENSE)
+[MIT](./LICENSE)

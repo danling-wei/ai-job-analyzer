@@ -4,7 +4,7 @@
 > and humans. **Update this file whenever architecture, conventions, or status
 > change.** Keep it short, factual, and skimmable.
 
-Last updated: 2026-05-16 (M1.10 - hybrid Qwen/OpenAI finalizer)
+Last updated: 2026-05-17 (M1.11 - Qwen3 8B QLoRA + teacher data generation)
 
 ---
 
@@ -45,7 +45,7 @@ workflow that:
 LLM provider is configurable
 (`LLM_PROVIDER=openai|anthropic|ollama|qwen_lora|qwen_service|mock`) and defaults to `mock`
 so the project runs offline out of the box. `qwen_lora` loads a local Qwen
-instruct model plus an optional PEFT LoRA adapter in-process. `qwen_service`
+instruct model plus an optional PEFT QLoRA/LoRA adapter in-process. `qwen_service`
 calls the standalone Qwen model service under `model_lab/server/`, keeping the
 application process CPU/lightweight.
 When `LLM_PROVIDER=qwen_service`, `FINALIZER_PROVIDER` can be set to
@@ -89,10 +89,13 @@ ai-job-analyzer/
 ├── model_lab/               # Qwen LoRA training/deployment workspace
 │   ├── README.md            # Data format, training, and deployment notes
 │   ├── configs/
-│   │   └── qwen_lora.yaml   # Small Qwen default training config
+│   │   └── qwen_lora.yaml   # Qwen3 8B default training config
 │   ├── data/examples/
+│   │   ├── qwen_skill_seed.example.jsonl
 │   │   └── qwen_skill_train.example.jsonl
 │   ├── scripts/
+│   │   ├── collect_qwen_seed_postings.py
+│   │   ├── generate_qwen_training_data.py
 │   │   └── finetune_qwen_lora.py
 │   ├── server/
 │   │   └── qwen_service.py  # standalone FastAPI model service
@@ -179,6 +182,8 @@ non-streaming `POST /analyze`).
   run as a separate GPU/model process. The service starts with
   `uv run ai-job-analyzer serve-qwen` and loads `QWEN_BASE_MODEL` plus optional
   `QWEN_ADAPTER_PATH`.
+  The default base model is `Qwen/Qwen3-8B`; QLoRA training is the default path
+  in `model_lab/scripts/finetune_qwen_lora.py`.
   `QwenServiceExtractor` sends postings to Qwen in small batches
   (`QWEN_SERVICE_BATCH_SIZE`, normally `1`) and treats Qwen as the high-volume
   skill extractor. Final low-volume cleanup is controlled by
@@ -240,7 +245,9 @@ uv run ai-job-analyzer analyze "Python Backend" --source serpapi
 
 # local fine-tuned Qwen LoRA extractor
 uv sync --extra qwen-lora
-uv run python model_lab/scripts/finetune_qwen_lora.py --train model_lab/data/examples/qwen_skill_train.example.jsonl --output model_lab/models/qwen-job-keyword-lora
+uv run python model_lab/scripts/collect_qwen_seed_postings.py --output model_lab/data/qwen_skill_seed.generated.jsonl --source serpapi --per-role 100
+uv run python model_lab/scripts/generate_qwen_training_data.py --input model_lab/data/qwen_skill_seed.generated.jsonl --output model_lab/data/qwen_skill_train.generated.jsonl --model gpt-5.2
+uv run python model_lab/scripts/finetune_qwen_lora.py --train model_lab/data/qwen_skill_train.generated.jsonl --output model_lab/models/qwen-job-keyword-lora
 LLM_PROVIDER=qwen_lora QWEN_ADAPTER_PATH=model_lab/models/qwen-job-keyword-lora uv run ai-job-analyzer analyze "Applied AI Engineer" --source serpapi
 
 # split-process Qwen service + application
@@ -248,7 +255,7 @@ uv run ai-job-analyzer serve-qwen
 LLM_PROVIDER=qwen_service uv run ai-job-analyzer serve --reload
 
 # hybrid mode: Qwen extracts per-JD skills; OpenAI canonicalizes and summarizes
-LLM_PROVIDER=qwen_service FINALIZER_PROVIDER=openai FINALIZER_MODEL=gpt-5.5 uv run ai-job-analyzer serve --reload
+LLM_PROVIDER=qwen_service FINALIZER_PROVIDER=openai FINALIZER_MODEL=gpt-5.2 uv run ai-job-analyzer serve --reload
 
 # tests / lint / types
 uv run pytest

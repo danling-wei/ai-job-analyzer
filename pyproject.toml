@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "danling-wei", email = "career.danling.wei@gmail.com" },
 ]
-license = "Apache-2.0"
+license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11,<3.14"
 keywords = ["llm", "agent", "job-search", "scraping", "career", "langgraph"]
@@ -51,6 +51,7 @@ anthropic = ["langchain-anthropic>=0.2.4"]
 ollama = ["langchain-ollama>=0.2.0"]
 qwen-lora = [
     "accelerate>=1.0",
+    "bitsandbytes>=0.44",
     "datasets>=3.0",
     "peft>=0.13",
     "torch>=2.4",
