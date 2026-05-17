@@ -1,0 +1,21 @@
+base_model: Qwen/Qwen2.5-1.5B-Instruct
+lightweight_model: Qwen/Qwen2.5-0.5B-Instruct
+output_dir: model_lab/models/qwen-job-keyword-lora
+train_file: model_lab/data/examples/qwen_skill_train.example.jsonl
+epochs: 2.0
+learning_rate: 0.0002
+batch_size: 1
+gradient_accumulation_steps: 8
+max_seq_length: 4096
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj

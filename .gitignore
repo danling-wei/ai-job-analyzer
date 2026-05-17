@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AI Job Analyzer
+.cache/
+.env
+node_modules/
+frontend/.next/
+frontend/out/
+model_lab/models/*
+!model_lab/models/.gitkeep
+

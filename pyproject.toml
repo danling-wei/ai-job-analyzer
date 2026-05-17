@@ -1,0 +1,114 @@
+[project]
+name = "ai-job-analyzer"
+version = "0.1.0"
+description = "Agentic workflow that scrapes job postings and uses LLMs to extract the key tech stack and core competencies for a given job title."
+readme = "README.md"
+authors = [
+    { name = "danling-wei", email = "career.danling.wei@gmail.com" },
+]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.11,<3.14"
+keywords = ["llm", "agent", "job-search", "scraping", "career", "langgraph"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
+
+dependencies = [
+    # Web API
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    # Settings & validation
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "python-dotenv>=1.0",
+    # HTTP / scraping
+    "httpx>=0.27",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.3",
+    "playwright>=1.49",
+    "tenacity>=9.0",
+    # LLM agentic workflow
+    "langgraph>=0.2.50",
+    "langchain>=0.3.7",
+    "langchain-core>=0.3.15",
+    "langchain-openai>=0.2.5",
+    # Observability / utils
+    "loguru>=0.7",
+    "rich>=13.9",
+    "typer>=0.13",
+]
+
+[project.optional-dependencies]
+# Optional alternative LLM providers; install as needed.
+anthropic = ["langchain-anthropic>=0.2.4"]
+ollama = ["langchain-ollama>=0.2.0"]
+qwen-lora = [
+    "accelerate>=1.0",
+    "datasets>=3.0",
+    "peft>=0.13",
+    "torch>=2.4",
+    "transformers>=4.46",
+    "trl>=0.12",
+]
+
+[project.scripts]
+ai-job-analyzer = "ai_job_analyzer.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "respx>=0.21",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.14,<0.12.0"]
+build-backend = "uv_build"
+
+# ---------------------------------------------------------------------------
+# Tooling
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["frontend"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",      # pycodestyle / pyflakes
+    "I",                # isort
+    "B",                # bugbear
+    "UP",               # pyupgrade
+    "SIM",              # simplify
+    "RUF",
+]
+# E501 handled by formatter; TID252 disabled because intra-package relative
+# imports are intentional.
+ignore = ["E501", "TID252"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+# Typer encourages function-call defaults (`= typer.Option(...)`).
+"src/ai_job_analyzer/cli.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+exclude = ["tests/", "frontend/"]
+
+[tool.pytest.ini_options]
+addopts = "-ra -q"
+testpaths = ["tests"]
+asyncio_mode = "auto"
