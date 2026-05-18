@@ -4,7 +4,7 @@
 > and humans. **Update this file whenever architecture, conventions, or status
 > change.** Keep it short, factual, and skimmable.
 
-Last updated: 2026-05-17 (M1.11 - Qwen3 8B QLoRA + teacher data generation)
+Last updated: 2026-05-18 (M1.12 - Qwen3 1.7B QLoRA + evaluation)
 
 ---
 
@@ -89,7 +89,7 @@ ai-job-analyzer/
 ├── model_lab/               # Qwen LoRA training/deployment workspace
 │   ├── README.md            # Data format, training, and deployment notes
 │   ├── configs/
-│   │   └── qwen_lora.yaml   # Qwen3 8B default training config
+│   │   └── qwen_lora.yaml   # Qwen3 1.7B default training config
 │   ├── data/examples/
 │   │   ├── qwen_skill_seed.example.jsonl
 │   │   └── qwen_skill_train.example.jsonl
@@ -185,10 +185,10 @@ non-streaming `POST /analyze`).
   run as a separate GPU/model process. The service starts with
   `uv run ai-job-analyzer serve-qwen` and loads `QWEN_BASE_MODEL` plus optional
   `QWEN_ADAPTER_PATH`.
-  The default base model is `Qwen/Qwen3-8B`; QLoRA training is the default path
+  The default base model is `Qwen/Qwen3-1.7B`; QLoRA training is the default path
   in `model_lab/scripts/finetune_qwen_lora.py`.
   Evaluation scripts under `model_lab/scripts/` can split the generated dataset,
-  run pure Qwen3 8B / GPT-5 mini / later QLoRA against the same test set, and
+  run pure Qwen3 1.7B / GPT-5 mini / later QLoRA against the same test set, and
   render an HTML comparison report with skill precision, recall, F1, and a
   deterministic faithfulness proxy.
   `QwenServiceExtractor` sends postings to Qwen in small batches

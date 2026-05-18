@@ -132,7 +132,7 @@ def render(metrics: list[dict[str, Any]]) -> str:
     <thead><tr><th>Run</th><th>Role</th><th>Samples</th><th>F1</th><th>Precision</th><th>Recall</th><th>Faithfulness</th></tr></thead>
     <tbody>{_role_table(metrics)}</tbody>
   </table>
-  <p class="note">Use the same test split for Qwen3-8B base, GPT-5 mini, and later Qwen3-8B QLoRA to make the comparison defensible.</p>
+  <p class="note">Use the same test split for Qwen3-1.7B base, GPT-5 mini, and later Qwen3-1.7B QLoRA to make the comparison defensible.</p>
 </main>
 </body>
 </html>

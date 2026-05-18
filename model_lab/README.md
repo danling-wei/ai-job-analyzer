@@ -9,7 +9,7 @@ datasets, LoRA fine-tuning, evaluation, and adapter artifacts.
 The default local fine-tuning target is now:
 
 ```text
-Qwen/Qwen3-8B
+Qwen/Qwen3-1.7B
 ```
 
 Use QLoRA for this model unless you have enough VRAM for full-precision LoRA.
@@ -19,7 +19,7 @@ If you need a lighter smoke-test model, try:
 Qwen/Qwen2.5-1.5B-Instruct
 ```
 
-The Qwen service defaults to Qwen3 8B. The main app can either load Qwen
+The Qwen service defaults to Qwen3 1.7B. The main app can either load Qwen
 in-process with `LLM_PROVIDER=qwen_lora` or call the separate service with
 `LLM_PROVIDER=qwen_service`.
 
@@ -76,7 +76,7 @@ you want the highest-quality labels over speed/cost, pass `--model gpt-5.2-pro`.
 uv run python model_lab/scripts/finetune_qwen_lora.py \
   --train model_lab/data/qwen_skill_train.generated.jsonl \
   --output model_lab/models/qwen-job-keyword-lora \
-  --base-model Qwen/Qwen3-8B
+  --base-model Qwen/Qwen3-1.7B
 ```
 
 ## Evaluate Base Qwen, GPT-5 Mini, And QLoRA
@@ -88,10 +88,10 @@ uv run python model_lab/scripts/split_qwen_dataset.py \
   --input model_lab/data/qwen_skill_train.generated.jsonl
 ```
 
-Run pure Qwen3 8B first. Start the Qwen service with no adapter:
+Run pure Qwen3 1.7B first. Start the Qwen service with no adapter:
 
 ```bash
-QWEN_BASE_MODEL=Qwen/Qwen3-8B QWEN_ADAPTER_PATH= uv run ai-job-analyzer serve-qwen
+QWEN_BASE_MODEL=Qwen/Qwen3-1.7B QWEN_ADAPTER_PATH= uv run ai-job-analyzer serve-qwen
 ```
 
 Then evaluate:
@@ -100,8 +100,8 @@ Then evaluate:
 uv run python model_lab/scripts/evaluate_skill_extractors.py \
   --dataset model_lab/data/eval/test.jsonl \
   --provider qwen_service \
-  --run-name qwen3-8b-base \
-  --qwen-model-name Qwen/Qwen3-8B
+  --run-name qwen3-1_7b-base \
+  --qwen-model-name Qwen/Qwen3-1.7B
 ```
 
 Evaluate GPT-5 mini on the same split:
@@ -115,13 +115,13 @@ uv run python model_lab/scripts/evaluate_skill_extractors.py \
 ```
 
 After QLoRA, restart the Qwen service with `QWEN_ADAPTER_PATH` set and run the
-same command with `--run-name qwen3-8b-qlora`.
+same command with `--run-name qwen3-1_7b-qlora`.
 
 Render a visual report:
 
 ```bash
 uv run python model_lab/scripts/render_eval_report.py \
-  model_lab/eval_runs/qwen3-8b-base.metrics.json \
+  model_lab/eval_runs/qwen3-1_7b-base.metrics.json \
   model_lab/eval_runs/gpt-5-mini.metrics.json \
   --output model_lab/eval_runs/report.html
 ```
@@ -151,7 +151,7 @@ does not load `torch`, `transformers`, or the model weights in the app process.
 Set `.env`:
 
 ```env
-QWEN_BASE_MODEL=Qwen/Qwen3-8B
+QWEN_BASE_MODEL=Qwen/Qwen3-1.7B
 QWEN_ADAPTER_PATH=model_lab/models/qwen-job-keyword-lora
 QWEN_DEVICE_MAP=auto
 QWEN_TORCH_DTYPE=auto
@@ -173,7 +173,7 @@ uv run ai-job-analyzer serve-qwen
 
 AWS:
 
-- Start with a GPU host with enough VRAM for Qwen3 8B QLoRA experiments.
+- Start with a GPU host with enough VRAM for Qwen3 1.7B QLoRA experiments.
 - Store adapter artifacts in S3 and sync them into `model_lab/models/` during deployment.
 
 Azure:

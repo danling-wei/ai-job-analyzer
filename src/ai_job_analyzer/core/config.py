@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
 
     # ---- Local Qwen LoRA extraction ---------------------------------------
-    qwen_base_model: str = "Qwen/Qwen3-8B"
+    qwen_base_model: str = "Qwen/Qwen3-1.7B"
     qwen_adapter_path: str | None = None
     qwen_device_map: str = "auto"
     qwen_torch_dtype: Literal["auto", "float16", "bfloat16", "float32"] = "auto"

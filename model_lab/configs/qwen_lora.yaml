@@ -1,4 +1,4 @@
-base_model: Qwen/Qwen3-8B
+base_model: Qwen/Qwen3-1.7B
 lightweight_model: Qwen/Qwen2.5-1.5B-Instruct
 output_dir: model_lab/models/qwen-job-keyword-lora
 train_file: model_lab/data/examples/qwen_skill_train.example.jsonl

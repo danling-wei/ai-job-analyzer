@@ -2,11 +2,11 @@
 
 Examples:
 
-    # Pure Qwen3-8B. Start qwen service separately without QWEN_ADAPTER_PATH.
+    # Pure Qwen3-1.7B. Start qwen service separately without QWEN_ADAPTER_PATH.
     uv run python model_lab/scripts/evaluate_skill_extractors.py \
       --dataset model_lab/data/eval/test.jsonl \
       --provider qwen_service \
-      --run-name qwen3-8b-base
+      --run-name qwen3-1_7b-base
 
     # GPT-5 mini.
     uv run python model_lab/scripts/evaluate_skill_extractors.py \
@@ -100,7 +100,7 @@ def _dotenv_value(name: str) -> str | None:
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [
-        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+        json.loads(line) for line in path.read_text(encoding="utf-8-sig").splitlines() if line.strip()
     ]
 
 
@@ -485,7 +485,7 @@ def main() -> None:
     parser.add_argument("--openai-model", default="gpt-5-mini")
     parser.add_argument("--openai-base-url", default="https://api.openai.com/v1")
     parser.add_argument("--qwen-service-url", default="http://127.0.0.1:8010")
-    parser.add_argument("--qwen-model-name", default="Qwen/Qwen3-8B")
+    parser.add_argument("--qwen-model-name", default="Qwen/Qwen3-1.7B")
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--timeout-seconds", type=float, default=240.0)
     parser.add_argument("--limit", type=int, default=None)

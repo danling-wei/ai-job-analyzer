@@ -97,7 +97,7 @@ uv run ai-job-analyzer serve-qwen
 LLM_PROVIDER=qwen_service FINALIZER_PROVIDER=openai uv run ai-job-analyzer serve --reload
 ```
 
-Qwen fine-tuning defaults to `Qwen/Qwen3-8B`. To generate supervised training
+Qwen fine-tuning defaults to `Qwen/Qwen3-1.7B`. To generate supervised training
 labels, first collect unlabeled seed postings:
 
 ```bash
@@ -125,7 +125,7 @@ uv run python model_lab/scripts/finetune_qwen_lora.py \
 ```
 
 To prove QLoRA helps, use the model-lab eval harness to compare pure
-`Qwen/Qwen3-8B`, `gpt-5-mini`, and later your QLoRA adapter on the same test
+`Qwen/Qwen3-1.7B`, `gpt-5-mini`, and later your QLoRA adapter on the same test
 split:
 
 ```bash

@@ -827,13 +827,23 @@ class QwenLoRAExtractor:
             for role, content in messages
         ]
         if hasattr(tokenizer, "apply_chat_template"):
-            return str(
-                tokenizer.apply_chat_template(
-                    chat_messages,
-                    tokenize=False,
-                    add_generation_prompt=True,
+            try:
+                return str(
+                    tokenizer.apply_chat_template(
+                        chat_messages,
+                        tokenize=False,
+                        add_generation_prompt=True,
+                        enable_thinking=False,
+                    )
                 )
-            )
+            except TypeError:
+                return str(
+                    tokenizer.apply_chat_template(
+                        chat_messages,
+                        tokenize=False,
+                        add_generation_prompt=True,
+                    )
+                )
         return "\n\n".join(f"{role.upper()}:\n{content}" for role, content in messages)
 
     def _invoke(self, messages: Sequence[tuple[str, str]]) -> str:
@@ -845,12 +855,18 @@ class QwenLoRAExtractor:
         inputs = tokenizer(prompt, return_tensors="pt")
         if hasattr(model, "device"):
             inputs = {key: value.to(model.device) for key, value in inputs.items()}
+        do_sample = self.settings.llm_temperature > 0
+        generation_kwargs: dict[str, object] = {
+            "max_new_tokens": self.settings.qwen_max_new_tokens,
+            "do_sample": do_sample,
+            "pad_token_id": tokenizer.eos_token_id,
+        }
+        if do_sample:
+            generation_kwargs["temperature"] = max(self.settings.llm_temperature, 0.01)
         with torch.no_grad():
             output_ids = model.generate(
                 **inputs,
-                max_new_tokens=self.settings.qwen_max_new_tokens,
-                do_sample=self.settings.llm_temperature > 0,
-                temperature=max(self.settings.llm_temperature, 0.01),
+                **generation_kwargs,
             )
         input_len = int(inputs["input_ids"].shape[-1])
         generated_ids = output_ids[0][input_len:]
@@ -864,10 +880,13 @@ class QwenLoRAExtractor:
         messages.append(
             (
                 "human",
-                "Return only one valid JSON object. Do not wrap it in markdown. "
+                "Return only one valid JSON object. Do not think step by step. "
+                "Do not include <think> tags. Do not wrap it in markdown. "
                 "Do not return a JSON schema. Use exactly these top-level keys: "
                 "top_skills, core_responsibilities, nice_to_have, summary. "
                 "Each top_skills item must have: name, category, importance, evidence. "
+                "Return at most 10 top_skills. Each skill evidence array must contain "
+                "at most 1 short verbatim snippet. "
                 "Only include skills directly supported by the posting text. "
                 "Do not add software-engineering skills to non-software roles "
                 "unless those exact skills appear in the posting. "

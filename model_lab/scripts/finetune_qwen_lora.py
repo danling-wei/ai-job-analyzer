@@ -51,7 +51,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--train", required=True, help="Training JSONL path.")
     parser.add_argument("--output", required=True, help="LoRA adapter output directory.")
-    parser.add_argument("--base-model", default="Qwen/Qwen3-8B")
+    parser.add_argument("--base-model", default="Qwen/Qwen3-1.7B")
     parser.add_argument("--epochs", type=float, default=2.0)
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--batch-size", type=int, default=1)
