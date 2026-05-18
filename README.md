@@ -153,6 +153,7 @@ text.
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `qwen3-1_7b-base` | `Qwen/Qwen3-1.7B` | 295 / 299 | 4 | 0.324 | 0.171 | 0.224 | 0.997 | 1,930 |
 | `gpt-5-mini` | `gpt-5-mini` | 299 / 299 | 0 | 0.326 | 0.342 | 0.334 | 0.982 | 3,902 |
+| `qwen3-1_7b-qlora-r16a32-compact` | `Qwen/Qwen3-1.7B + QLoRA` | 275 / 299 | 24 | 0.409 | 0.235 | 0.299 | 0.999 | 1,959 |
 
 Interpretation: pure Qwen3-1.7B is conservative and highly faithful, but it
 misses many teacher-labeled skills, which lowers recall and F1. GPT-5 mini is
@@ -161,8 +162,49 @@ coverage and zero failures. This gives the QLoRA experiment a clear target:
 increase Qwen recall/F1 while preserving high faithfulness and a low failure
 rate.
 
+The compact QLoRA adapter improves Qwen's skill precision, recall, and F1 over
+the base 1.7B model while preserving very high evidence faithfulness. However,
+it also raises the strict-schema failure rate to 24 / 299 samples because some
+full structured outputs are still malformed. This suggests the 1.7B model is a
+better fit for a narrower skills-only extractor, with summary and responsibility
+synthesis handled by a stronger finalizer.
+
+To reduce duplicate skill entities across jobs and models, run the global
+canonicalization pass:
+
+```bash
+uv run python model_lab/scripts/canonicalize_skill_names.py
+```
+
+This writes one reusable mapping to
+`model_lab/data/skill_canonicalization/skill_canonicalization.mapping.json` and
+canonicalized copies under `model_lab/data/canonicalized/` and
+`model_lab/eval_runs/canonicalized/`. Using this conservative shared mapping,
+the GPT-5 mini strict-match F1 rises from `0.334` to `0.380`, and the compact
+QLoRA F1 rises from `0.299` to `0.320`.
+
+For a fairer semantic score, run the cached LLM-as-judge evaluator:
+
+```bash
+uv run python model_lab/scripts/evaluate_semantic_skill_matches.py \
+  model_lab/eval_runs/canonicalized/qwen3-1_7b-base.predictions.jsonl \
+  model_lab/eval_runs/canonicalized/gpt-5-mini.predictions.jsonl \
+  model_lab/eval_runs/canonicalized/qwen3-1_7b-qlora-r16a32-compact.predictions.jsonl
+```
+
+The judge only reviews plausible unmatched skill pairs and stores decisions in
+`model_lab/data/skill_canonicalization/semantic_match_judgments.jsonl`. With
+`gpt-5-mini` as the cached semantic judge, the current held-out results are:
+
+| Run | Semantic precision | Semantic recall | Semantic F1 | Exact F1 before semantic judge |
+| --- | ---: | ---: | ---: | ---: |
+| `qwen3-1_7b-base-semantic` | 0.449 | 0.236 | 0.310 | 0.245 |
+| `gpt-5-mini-semantic` | 0.559 | 0.587 | 0.572 | 0.380 |
+| `qwen3-1_7b-qlora-r16a32-compact-semantic` | 0.538 | 0.309 | 0.392 | 0.320 |
+
 For a local visual report after running the evaluation commands, open
-`model_lab/eval_runs/report.html`.
+`model_lab/eval_runs/report.html`. For the semantic judge report, open
+`model_lab/eval_runs/semantic/report.html`.
 
 ## License
 

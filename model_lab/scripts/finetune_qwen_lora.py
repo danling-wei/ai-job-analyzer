@@ -11,14 +11,63 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 SYSTEM_PROMPT = (
-    "You extract a job-seeker skill-gap checklist from job postings. "
-    "Return only JSON with top_skills, core_responsibilities, nice_to_have, and summary. "
-    "Top skills must be concrete learnable skills/tools/platforms/methods, not generic labels."
+    "You extract a job-seeker skill-gap checklist from one job posting. "
+    "Return only one valid JSON object with exactly these top-level keys: "
+    "top_skills, core_responsibilities, nice_to_have, summary. "
+    "Top skills must be concrete learnable tools, platforms, frameworks, "
+    "languages, methods, and role-specific domains. Evidence must be short "
+    "verbatim snippets from the posting."
 )
+
+
+def _compact_text(value: Any, *, max_chars: int) -> str:
+    text = str(value or "")
+    text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 3].rstrip() + "..."
+
+
+def _compact_output(output: dict[str, Any]) -> dict[str, Any]:
+    compact_skills: list[dict[str, Any]] = []
+    for skill in output.get("top_skills") or []:
+        if not isinstance(skill, dict):
+            continue
+        evidence = [
+            _compact_text(item, max_chars=120)
+            for item in skill.get("evidence") or []
+            if str(item or "").strip()
+        ][:1]
+        compact_skills.append(
+            {
+                "name": _compact_text(skill.get("name"), max_chars=80),
+                "category": skill.get("category") or "other",
+                "importance": skill.get("importance") or 0.0,
+                "evidence": evidence,
+            }
+        )
+        if len(compact_skills) >= 10:
+            break
+
+    return {
+        "top_skills": compact_skills,
+        "core_responsibilities": [
+            _compact_text(item, max_chars=180)
+            for item in output.get("core_responsibilities") or []
+            if str(item or "").strip()
+        ][:10],
+        "nice_to_have": [
+            _compact_text(item, max_chars=160)
+            for item in output.get("nice_to_have") or []
+            if str(item or "").strip()
+        ][:10],
+        "summary": _compact_text(output.get("summary"), max_chars=420),
+    }
 
 
 def _format_example(row: dict[str, Any]) -> dict[str, str]:
@@ -42,9 +91,40 @@ def _format_example(row: dict[str, Any]) -> dict[str, str]:
     output = row.get("output")
     if not isinstance(output, dict):
         raise ValueError("Each row must include an output object.")
-    user = f"Target role: {row.get('job_title', 'Unknown')}\n\nPostings:\n\n{chr(10).join(chunks)}"
-    assistant = json.dumps(output, ensure_ascii=False)
+    user = "\n".join(
+        [
+            f"Target role: {row.get('job_title', 'Unknown')}",
+            "Maximum top_skills: 10",
+            "Maximum evidence snippets per skill: 1",
+            "",
+            "Postings:",
+            "",
+            chr(10).join(chunks),
+        ]
+    )
+    assistant = json.dumps(_compact_output(output), ensure_ascii=False, separators=(",", ":"))
     return {"system": SYSTEM_PROMPT, "user": user, "assistant": assistant}
+
+
+def _read_training_rows(path: Path) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    skipped = 0
+    for line_number, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            rows.append(_format_example(json.loads(line)))
+        except Exception as exc:
+            skipped += 1
+            print(
+                f"Skipping invalid training row at {path}:{line_number}: {exc}",
+                file=sys.stderr,
+            )
+    if skipped:
+        print(f"Skipped {skipped} invalid training rows.", file=sys.stderr)
+    if not rows:
+        raise ValueError(f"No valid training rows found in {path}.")
+    return rows
 
 
 def main() -> None:
@@ -57,6 +137,9 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--grad-accum", type=int, default=8)
     parser.add_argument("--max-seq-length", type=int, default=4096)
+    parser.add_argument("--lora-r", type=int, default=16)
+    parser.add_argument("--lora-alpha", type=int, default=32)
+    parser.add_argument("--lora-dropout", type=float, default=0.05)
     parser.add_argument(
         "--qlora",
         action=argparse.BooleanOptionalAction,
@@ -71,11 +154,7 @@ def main() -> None:
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from trl import SFTConfig, SFTTrainer
 
-    rows = [
-        _format_example(json.loads(line))
-        for line in Path(args.train).read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    rows = _read_training_rows(Path(args.train))
     dataset = Dataset.from_list(rows)
 
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)
@@ -107,9 +186,9 @@ def main() -> None:
     if args.qlora:
         model = prepare_model_for_kbit_training(model)
     lora = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        lora_dropout=0.05,
+        r=args.lora_r,
+        lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout,
         bias="none",
         task_type="CAUSAL_LM",
         target_modules=[
@@ -128,7 +207,7 @@ def main() -> None:
         learning_rate=args.lr,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
-        max_seq_length=args.max_seq_length,
+        max_length=args.max_seq_length,
         logging_steps=10,
         save_strategy="epoch",
         dataset_text_field="text",
