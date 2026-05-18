@@ -4,7 +4,9 @@ Agentic workflow that, given a job title, scrapes matching postings from
 multiple job boards and uses an LLM to extract the **key tech stack** and
 **core competencies** required for the role.
 
-> Companion doc: see [`CLAUDE.md`](./CLAUDE.md) for the living architecture
+![AI Job Analyzer web UI](screenshots/image.png)
+
+> Companion doc: see [`AGENTS.md`](./AGENTS.md) for the living architecture
 > notes, conventions, and roadmap.
 
 ## Status
