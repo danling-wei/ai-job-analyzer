@@ -20,6 +20,7 @@ import json
 import re
 from collections import Counter
 from collections.abc import Awaitable, Callable, Sequence
+from pathlib import Path
 from typing import Any, Literal, Protocol, cast
 
 import httpx
@@ -747,6 +748,57 @@ def _apply_skill_canonicalization(
     return result
 
 
+def _load_static_skill_canonicalization(path: str | None) -> list[_SkillCanonicalizationItem]:
+    """Load the saved global alias mapping used by training/evaluation."""
+    if not path:
+        return []
+    mapping_path = Path(path)
+    if not mapping_path.exists():
+        logger.warning("Skill canonicalization mapping not found: {}", mapping_path)
+        return []
+    try:
+        payload = json.loads(mapping_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Could not read skill canonicalization mapping {}: {}", mapping_path, exc)
+        return []
+
+    mappings: list[_SkillCanonicalizationItem] = []
+    for entry in payload.get("entries", []):
+        if not isinstance(entry, dict):
+            continue
+        canonical = str(entry.get("canonical_name") or "").strip()
+        if not canonical:
+            continue
+        category = str(entry.get("category") or "other")
+        if category not in _VALID_SKILL_CATEGORIES:
+            category = "other"
+        aliases = entry.get("aliases") or [canonical]
+        for alias in aliases:
+            original = str(alias or "").strip()
+            if not original:
+                continue
+            mappings.append(
+                _SkillCanonicalizationItem(
+                    original=original,
+                    canonical=canonical,
+                    keep=True,
+                    category=cast(
+                        Literal[
+                            "language",
+                            "framework",
+                            "tool",
+                            "platform",
+                            "domain",
+                            "soft_skill",
+                            "other",
+                        ],
+                        category,
+                    ),
+                )
+            )
+    return mappings
+
+
 def _extract_json_object(text: str) -> str:
     """Extract the first JSON object from a model response."""
     cleaned = text.strip()
@@ -1286,6 +1338,7 @@ class QwenServiceExtractor:
         self.base_url = self.settings.qwen_service_url.rstrip("/")
         self.progress_callback = progress_callback
         self._openai_finalizer: OpenAIFinalizer | None = None
+        self._static_skill_mappings: list[_SkillCanonicalizationItem] | None = None
 
     def _get_openai_finalizer(self) -> OpenAIFinalizer:
         if self._openai_finalizer is None:
@@ -1295,6 +1348,13 @@ class QwenServiceExtractor:
     def _posting_batches(self, postings: list[JobPosting]) -> list[list[JobPosting]]:
         batch_size = max(1, self.settings.qwen_service_batch_size)
         return [postings[i : i + batch_size] for i in range(0, len(postings), batch_size)]
+
+    def _get_static_skill_mappings(self) -> list[_SkillCanonicalizationItem]:
+        if self._static_skill_mappings is None:
+            self._static_skill_mappings = _load_static_skill_canonicalization(
+                self.settings.skill_canonicalization_mapping_path
+            )
+        return self._static_skill_mappings
 
     async def _extract_batch(
         self,
@@ -1356,6 +1416,10 @@ class QwenServiceExtractor:
         job_title: str,
         merged: AnalysisResult,
     ) -> AnalysisResult:
+        static_mappings = self._get_static_skill_mappings()
+        if static_mappings:
+            merged = _apply_skill_canonicalization(merged, static_mappings)
+
         if self.settings.finalizer_provider == "openai":
             output = await self._get_openai_finalizer().canonicalise_skills(
                 job_title,

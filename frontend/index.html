@@ -1,216 +1,285 @@
 <!doctype html>
-<html lang="en" class="bg-slate-950">
+<html lang="en" class="bg-black">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AI Job Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
     <style>
-      :root { font-family: 'Inter', system-ui, sans-serif; }
-      .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-
-      /* Pulsing dot for "running" state */
+      :root {
+        color-scheme: dark;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+      .mono {
+        font-family: "SFMono-Regular", "Cascadia Code", Consolas, ui-monospace, monospace;
+      }
+      .glass {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035));
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 20px 80px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(28px);
+      }
+      .field {
+        background: rgba(8, 8, 10, 0.88);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      .field:focus {
+        border-color: rgba(255, 255, 255, 0.42);
+        box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08);
+        outline: none;
+      }
+      .soft-ring {
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.08),
+          0 1px 0 rgba(255, 255, 255, 0.04);
+      }
+      .bar {
+        background: linear-gradient(90deg, #f5f5f7 0%, #8ab4ff 55%, #7dd3fc 100%);
+      }
+      .line-clamp-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
       @keyframes pulseDot {
-        0%, 100% { transform: scale(1); opacity: 1; }
-        50%      { transform: scale(1.3); opacity: 0.6; }
+        0%,
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: scale(1.35);
+          opacity: 0.55;
+        }
       }
-      .dot-running { animation: pulseDot 1s ease-in-out infinite; }
-
-      /* Subtle slide-in for new timeline rows */
+      .dot-running {
+        animation: pulseDot 1s ease-in-out infinite;
+      }
       @keyframes slideIn {
-        from { opacity: 0; transform: translateY(-4px); }
-        to   { opacity: 1; transform: translateY(0); }
+        from {
+          opacity: 0;
+          transform: translateY(-6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
-      .slide-in { animation: slideIn 180ms ease-out; }
-
-      /* Skill bar */
-      .bar { background: linear-gradient(90deg, #22d3ee 0%, #818cf8 100%); }
+      .slide-in {
+        animation: slideIn 180ms ease-out;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .dot-running,
+        .slide-in {
+          animation: none;
+        }
+      }
     </style>
   </head>
 
-  <body class="min-h-screen bg-slate-950 text-slate-100">
-    <header class="border-b border-slate-800 bg-slate-950/95">
-      <div class="mx-auto max-w-6xl px-6 py-5 flex items-center gap-3">
-        <div class="h-9 w-9 rounded-xl bg-gradient-to-br from-cyan-400 to-indigo-500 grid place-items-center text-slate-950 font-bold">JA</div>
-        <div>
-          <h1 class="text-lg font-semibold leading-tight">AI Job Analyzer</h1>
-          <p class="text-xs text-slate-400">Agentic workflow for job market intelligence</p>
+  <body class="min-h-screen overflow-x-hidden bg-black text-zinc-100">
+    <div class="pointer-events-none fixed inset-0 -z-10">
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(120,120,140,0.22),transparent_34%),linear-gradient(180deg,#050505_0%,#0b0b0d_48%,#000_100%)]"></div>
+      <div class="absolute inset-x-0 top-0 h-px bg-white/20"></div>
+    </div>
+
+    <header class="sticky top-0 z-30 border-b border-white/10 bg-black/75 backdrop-blur-2xl">
+      <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
+        <div class="grid h-8 w-8 place-items-center rounded-full bg-white text-sm font-semibold text-black soft-ring">
+          JA
+        </div>
+        <div class="min-w-0">
+          <h1 class="text-sm font-semibold tracking-tight text-white">AI Job Analyzer</h1>
+          <p class="hidden text-xs text-zinc-500 sm:block">Local Qwen skills extraction with final LLM synthesis</p>
         </div>
         <a
           href="/docs"
           target="_blank"
           rel="noopener"
-          class="ml-auto text-sm text-slate-400 hover:text-cyan-300"
-          >OpenAPI ↗</a
+          class="ml-auto rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-white/25 hover:bg-white/10 hover:text-white"
         >
+          OpenAPI
+        </a>
       </div>
     </header>
 
-    <main class="mx-auto max-w-6xl px-6 py-8 grid gap-6 lg:grid-cols-[360px_1fr]">
-      <!-- ============================== Form ============================== -->
-      <section class="space-y-6">
-        <form
-          id="form"
-          class="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-sm shadow-black/30 space-y-4"
-        >
-          <div>
-            <label class="text-xs font-medium text-slate-300">Job title</label>
+    <main class="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:py-8">
+      <section class="glass rounded-[28px] p-4 sm:p-5">
+        <div class="mb-4 flex flex-col gap-1">
+          <p class="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">Analyze a role</p>
+          <h2 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Find the skills behind the job market.</h2>
+        </div>
+
+        <form id="form" class="grid gap-3 lg:grid-cols-[minmax(220px,1.3fr)_minmax(180px,0.9fr)_130px_220px]">
+          <label class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-zinc-400">Job title</span>
             <input
               id="job_title"
               required
               minlength="2"
-              placeholder="e.g. Senior ML Engineer"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              placeholder="Senior ML Engineer"
+              class="field h-11 rounded-2xl px-4 text-sm text-white placeholder:text-zinc-600 transition"
             />
-          </div>
+          </label>
 
-          <div>
-            <label class="text-xs font-medium text-slate-300">Location (optional)</label>
+          <label class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-zinc-400">Location</span>
             <input
               id="location"
-              placeholder="e.g. Remote, Berlin"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              placeholder="Remote, New York"
+              class="field h-11 rounded-2xl px-4 text-sm text-white placeholder:text-zinc-600 transition"
             />
-          </div>
+          </label>
 
-          <div>
-            <label class="text-xs font-medium text-slate-300">Sources</label>
-            <div id="sources" class="mt-2 space-y-1 text-sm text-slate-300">
-              <div class="text-xs text-slate-400">Loading…</div>
-            </div>
-          </div>
-
-          <div>
-            <label class="text-xs font-medium text-slate-300">Max per source</label>
+          <label class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-zinc-400">Max/source</span>
             <input
               id="max_per_source"
               type="number"
               min="1"
               max="200"
               value="20"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              class="field h-11 rounded-2xl px-4 text-sm text-white transition"
             />
+          </label>
+
+          <div class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-zinc-400">Sources</span>
+            <div id="sources" class="field min-h-11 rounded-2xl px-3 py-2 text-sm text-zinc-300">
+              <span class="text-xs text-zinc-500">Loading...</span>
+            </div>
           </div>
 
-          <button
-            id="run"
-            type="submit"
-            class="w-full rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-sm font-semibold px-4 py-2.5 transition disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed"
-          >
-            Run workflow
-          </button>
+          <div class="lg:col-span-4 flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
+            <button
+              id="run"
+              type="submit"
+              class="h-11 rounded-full bg-white px-6 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+            >
+              Run analysis
+            </button>
+            <div class="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <span class="rounded-full border border-white/10 px-3 py-1">Qwen skills-only</span>
+              <span class="rounded-full border border-white/10 px-3 py-1">Static skill de-duplication</span>
+              <span class="rounded-full border border-white/10 px-3 py-1">Final summary synthesis</span>
+            </div>
+            <span id="status_badge" class="ml-auto w-fit rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-400">
+              idle
+            </span>
+          </div>
         </form>
-
-        <div class="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-sm shadow-black/30 text-xs text-slate-400 space-y-1">
-          <p>
-            Tip: leave the LLM provider as <span class="mono">mock</span> in
-            <span class="mono">.env</span> if you don't have an API key —
-            you'll still get a real scrape and a heuristic skill ranking.
-          </p>
-          <p>Set <span class="mono">LLM_PROVIDER=openai</span> + <span class="mono">OPENAI_API_KEY</span> for a real summary.</p>
-        </div>
       </section>
 
-      <!-- ============================== Right pane ============================== -->
-      <section class="space-y-6 min-w-0">
-        <!-- Workflow timeline -->
-        <div class="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-sm shadow-black/30">
-          <div class="flex items-center justify-between mb-4">
+      <section class="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)]">
+        <aside class="glass rounded-[28px] p-5">
+          <div class="mb-5 flex items-start justify-between gap-3">
             <div>
-              <h2 class="text-base font-semibold">Workflow</h2>
-              <p class="text-xs text-slate-400">Live events streamed from the agent.</p>
+              <h2 class="text-base font-semibold text-white">Live workflow</h2>
+              <p class="mt-1 text-sm leading-5 text-zinc-500">Follow each model and pipeline step as it happens.</p>
             </div>
-            <span
-              id="status_badge"
-              class="text-xs px-2 py-1 rounded-full bg-slate-800 text-slate-400"
-              >idle</span
-            >
           </div>
 
-          <ol id="timeline" class="space-y-3"></ol>
+          <ol id="timeline" class="space-y-4"></ol>
 
-          <details class="mt-4 group">
-            <summary class="text-xs text-slate-500 cursor-pointer select-none hover:text-slate-300">
+          <details class="mt-5 rounded-2xl border border-white/10 bg-black/35 p-3">
+            <summary class="cursor-pointer select-none text-xs text-zinc-500 hover:text-zinc-300">
               Raw event log
             </summary>
-            <pre
-              id="event_log"
-              class="mono mt-2 max-h-64 overflow-auto text-[11px] leading-relaxed bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300"
-            ></pre>
+            <pre id="event_log" class="mono mt-3 max-h-64 overflow-auto whitespace-pre-wrap text-[11px] leading-relaxed text-zinc-400"></pre>
           </details>
-        </div>
+        </aside>
 
-        <!-- Result -->
-        <div id="result_section" class="hidden space-y-6">
-          <div class="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-sm shadow-black/30">
-            <h2 class="text-base font-semibold">Summary</h2>
-            <p id="summary_text" class="mt-2 text-sm leading-6 text-slate-300"></p>
-            <div class="mt-3 text-xs text-slate-500">
-              Analysed <span id="summary_count" class="mono"></span> postings.
+        <section id="result_section" class="hidden space-y-6">
+          <article class="glass rounded-[28px] p-5">
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="text-base font-semibold text-white">Summary</h2>
+              <span class="rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-500">
+                <span id="summary_count" class="mono"></span> postings
+              </span>
             </div>
-          </div>
+            <p id="summary_text" class="mt-4 text-sm leading-7 text-zinc-300"></p>
+          </article>
 
-          <div class="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-sm shadow-black/30">
-            <h2 class="text-base font-semibold mb-3">Top skills</h2>
-            <ul id="skills" class="space-y-2"></ul>
-          </div>
-
-          <div class="grid gap-6 md:grid-cols-2">
-            <div class="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-sm shadow-black/30">
-              <h2 class="text-base font-semibold mb-3">Core responsibilities</h2>
-              <ul id="responsibilities" class="text-sm text-slate-300 space-y-1.5 list-disc list-inside"></ul>
+          <article class="glass rounded-[28px] p-5">
+            <div class="mb-4 flex items-center justify-between gap-3">
+              <h2 class="text-base font-semibold text-white">Skills</h2>
+              <span class="text-xs text-zinc-500">frequency + importance</span>
             </div>
-            <div class="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-sm shadow-black/30">
-              <h2 class="text-base font-semibold mb-3">Nice to have</h2>
-              <ul id="nice_to_have" class="text-sm text-slate-300 space-y-1.5 list-disc list-inside"></ul>
-            </div>
+            <ul id="skills" class="space-y-3"></ul>
+          </article>
+
+          <div class="grid gap-6 xl:grid-cols-2">
+            <article class="glass rounded-[28px] p-5">
+              <h2 class="text-base font-semibold text-white">Core responsibilities</h2>
+              <ul id="responsibilities" class="mt-4 space-y-2 text-sm leading-6 text-zinc-300"></ul>
+            </article>
+            <article class="glass rounded-[28px] p-5">
+              <h2 class="text-base font-semibold text-white">Nice to have</h2>
+              <ul id="nice_to_have" class="mt-4 space-y-2 text-sm leading-6 text-zinc-300"></ul>
+            </article>
           </div>
 
-          <div class="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-sm shadow-black/30">
-            <h2 class="text-base font-semibold mb-3">Postings analysed</h2>
-            <ul id="postings" class="divide-y divide-slate-800"></ul>
+          <article class="glass rounded-[28px] p-5">
+            <h2 class="text-base font-semibold text-white">Postings analysed</h2>
+            <ul id="postings" class="mt-3 divide-y divide-white/10"></ul>
+          </article>
+        </section>
+
+        <section id="empty_state" class="glass rounded-[28px] p-8 text-center">
+          <div class="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-white text-lg font-semibold text-black">
+            AI
           </div>
-        </div>
+          <h2 class="text-xl font-semibold tracking-tight text-white">Ready when you are.</h2>
+          <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-500">
+            Enter a role at the top. The app will scrape postings, ask the local Qwen adapter to extract skills, merge duplicates, and synthesize the final report.
+          </p>
+        </section>
       </section>
     </main>
 
     <script>
-      // --------------------------------------------------------------- helpers
-      const $  = (id) => document.getElementById(id);
+      const $ = (id) => document.getElementById(id);
       const escapeHTML = (s) =>
         String(s ?? '').replace(/[&<>"']/g, (c) =>
           ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]),
         );
 
-      // -------------------------------------------------------------- timeline
-      // Timeline rows are keyed by stage id so we can update their status in place.
-      const timeline = $('timeline');
-      const rowState = new Map(); // id -> {el, statusEl, detailEl}
+      const WORKFLOW_LABELS = {
+        plan: 'Plan search',
+        scrape: 'Collect job postings',
+        dedupe: 'Remove duplicate postings',
+        extract: 'Run Qwen skills model',
+        result: 'Render final report',
+      };
 
       const STATE_STYLES = {
-        pending: { dot: 'bg-slate-600', text: 'text-slate-500', label: 'pending' },
-        running: { dot: 'bg-cyan-400 dot-running', text: 'text-cyan-300', label: 'running' },
+        pending: { dot: 'bg-zinc-700', text: 'text-zinc-500', label: 'pending' },
+        running: { dot: 'bg-white dot-running shadow-[0_0_24px_rgba(255,255,255,0.55)]', text: 'text-white', label: 'running' },
         skipped: { dot: 'bg-amber-300', text: 'text-amber-300', label: 'skipped' },
-        done:    { dot: 'bg-emerald-400', text: 'text-emerald-300', label: 'done' },
-        error:   { dot: 'bg-rose-400', text: 'text-rose-300',  label: 'error' },
+        done: { dot: 'bg-emerald-300', text: 'text-emerald-300', label: 'done' },
+        error: { dot: 'bg-rose-400', text: 'text-rose-300', label: 'error' },
       };
+
+      const timeline = $('timeline');
+      const rowState = new Map();
 
       function ensureRow(id, label) {
         if (rowState.has(id)) return rowState.get(id);
         const el = document.createElement('li');
-        el.className = 'slide-in flex items-start gap-3';
+        el.className = 'slide-in grid grid-cols-[18px_1fr] gap-3';
         el.innerHTML = `
-          <span class="dot mt-1.5 inline-block h-2.5 w-2.5 rounded-full bg-slate-600 shrink-0"></span>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-sm font-medium text-slate-100">${escapeHTML(label)}</span>
-              <span class="status text-xs text-slate-500">pending</span>
+          <div class="flex justify-center pt-1.5">
+            <span class="dot inline-block h-2.5 w-2.5 rounded-full bg-zinc-700"></span>
+          </div>
+          <div class="min-w-0 rounded-2xl border border-white/10 bg-black/30 p-3">
+            <div class="flex items-center justify-between gap-3">
+              <span class="label text-sm font-medium text-white">${escapeHTML(label)}</span>
+              <span class="status rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-zinc-500">pending</span>
             </div>
-            <div class="detail text-xs text-slate-400 mt-0.5"></div>
+            <div class="detail mt-1 text-xs leading-5 text-zinc-500"></div>
           </div>`;
         timeline.appendChild(el);
         const row = {
@@ -224,27 +293,31 @@
       }
 
       function setRow(id, state, detail) {
-        const row = ensureRow(id, id); // label was set on first create
+        const row = ensureRow(id, WORKFLOW_LABELS[id] ?? id);
         const cfg = STATE_STYLES[state] ?? STATE_STYLES.pending;
-        row.dot.className = 'dot mt-1.5 inline-block h-2.5 w-2.5 rounded-full shrink-0 ' + cfg.dot;
-        row.status.className = 'status text-xs ' + cfg.text;
+        row.dot.className = 'dot inline-block h-2.5 w-2.5 rounded-full ' + cfg.dot;
+        row.status.className = 'status rounded-full bg-white/5 px-2 py-0.5 text-[11px] ' + cfg.text;
         row.status.textContent = cfg.label;
         if (detail !== undefined) row.detail.innerHTML = detail;
       }
 
-      // ---------------------------------------------------------- event router
-      const eventLog = $('event_log');
-      function logEvent(type, data) {
-        const t = new Date().toISOString().slice(11, 23);
-        eventLog.textContent += `[${t}] ${type} ${JSON.stringify(data)}\n`;
-        eventLog.scrollTop = eventLog.scrollHeight;
+      function setStatus(label, color = 'zinc') {
+        const styles = {
+          zinc: 'bg-white/5 text-zinc-400',
+          white: 'bg-white text-black',
+          emerald: 'bg-emerald-400/10 text-emerald-300',
+          rose: 'bg-rose-400/10 text-rose-300',
+        };
+        $('status_badge').textContent = label;
+        $('status_badge').className = 'ml-auto w-fit rounded-full px-3 py-1 text-xs ' + (styles[color] ?? styles.zinc);
       }
 
       function resetUI() {
         timeline.innerHTML = '';
         rowState.clear();
-        eventLog.textContent = '';
+        $('event_log').textContent = '';
         $('result_section').classList.add('hidden');
+        $('empty_state').classList.remove('hidden');
         $('skills').innerHTML = '';
         $('responsibilities').innerHTML = '';
         $('nice_to_have').innerHTML = '';
@@ -253,211 +326,174 @@
         $('summary_count').textContent = '';
       }
 
-      function setStatus(label, color = 'slate') {
-        const badge = $('status_badge');
-        badge.textContent = label;
-        badge.className =
-          'text-xs px-2 py-1 rounded-full ' +
-          ({
-            slate:   'bg-slate-800 text-slate-400',
-            indigo:  'bg-cyan-950 text-cyan-300',
-            emerald: 'bg-emerald-950 text-emerald-300',
-            rose:    'bg-rose-950 text-rose-300',
-          }[color] ?? 'bg-slate-800 text-slate-400');
+      function logEvent(type, data) {
+        const t = new Date().toISOString().slice(11, 23);
+        $('event_log').textContent += `[${t}] ${type} ${JSON.stringify(data)}\n`;
+        $('event_log').scrollTop = $('event_log').scrollHeight;
+      }
+
+      function progressBlock(text, pct, subtext = '') {
+        const width = Math.max(0, Math.min(100, pct));
+        return `
+          <div class="space-y-2">
+            <div>${text}</div>
+            ${subtext ? `<div class="text-[11px] text-zinc-600">${subtext}</div>` : ''}
+            <div class="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div class="bar h-full rounded-full" style="width:${width}%"></div>
+            </div>
+          </div>`;
       }
 
       function handleEvent(type, data) {
         logEvent(type, data);
-
         switch (type) {
-          case 'plan:start': {
-            const row = ensureRow('plan', '1. Plan');
-            row.detail.textContent = `Job: "${data.job_title}"` +
-              (data.location ? `, location: ${data.location}` : '');
-            setRow('plan', 'running');
+          case 'plan:start':
+            setStatus('planning', 'white');
+            ensureRow('plan', WORKFLOW_LABELS.plan);
+            setRow('plan', 'running', `Preparing search for <span class="text-zinc-300">${escapeHTML(data.job_title)}</span>${data.location ? ` in ${escapeHTML(data.location)}` : ''}.`);
             break;
-          }
-          case 'plan:done': {
+          case 'plan:done':
+            setRow('plan', 'done', `Sources: <span class="mono text-zinc-300">${escapeHTML(data.sources.join(', '))}</span>. Max per source: <span class="mono">${data.max_per_source}</span>.`);
+            break;
+
+          case 'scrape:start':
+            setStatus('collecting jobs', 'white');
+            setRow('scrape', 'running', `Searching ${data.sources.length} source(s) for matching postings.`);
+            break;
+          case 'scrape:source:start':
+            for (const source of data.sources) {
+              ensureRow(`scrape:${source}`, `Source: ${source}`);
+              setRow(`scrape:${source}`, 'running', 'Fetching postings...');
+            }
+            break;
+          case 'scrape:source:done':
+            setRow(`scrape:${data.source}`, 'done', `${data.count} postings found. Running total: ${data.postings_so_far}.`);
+            break;
+          case 'scrape:source:error':
+            setRow(`scrape:${data.source}`, 'error', escapeHTML(data.error));
+            break;
+          case 'scrape:source:skipped':
+            setRow(`scrape:${data.source}`, 'skipped', escapeHTML(data.error));
+            break;
+          case 'scrape:done':
+            setRow('scrape', 'done', `${data.total} postings collected.`);
+            break;
+
+          case 'dedupe:start':
+            setStatus('deduplicating', 'white');
+            setRow('dedupe', 'running', `Checking ${data.input} postings for duplicates.`);
+            break;
+          case 'dedupe:done':
+            setRow('dedupe', 'done', `${data.before} -> ${data.after}; removed ${data.removed}.`);
+            break;
+
+          case 'extract:start': {
+            setStatus('running model', 'white');
+            const provider = data.provider === 'qwen_service'
+              ? 'Qwen skills-only adapter'
+              : `${data.provider}${data.model ? ` / ${data.model}` : ''}`;
             setRow(
-              'plan',
-              'done',
-              `Sources: <span class="mono">${data.sources.join(', ')}</span> · ` +
-              `cap=${data.max_per_source} · llm=<span class="mono">${data.llm_provider}</span>`,
+              'extract',
+              'running',
+              progressBlock(
+                `Starting ${escapeHTML(provider)} on ${data.postings} posting(s).`,
+                0,
+                'Skills are extracted per JD, then merged and de-duplicated before final synthesis.',
+              ),
             );
             break;
           }
-
-          case 'scrape:start': {
-            ensureRow('scrape', '2. Scrape');
-            setRow('scrape', 'running', `Querying ${data.sources.length} source(s) in parallel…`);
-            break;
-          }
-          case 'scrape:source:start': {
-            for (const s of data.sources) {
-              const id = 'scrape:' + s;
-              ensureRow(id, `   ↳ ${s}`);
-              setRow(id, 'running', 'fetching…');
-            }
-            break;
-          }
-          case 'scrape:source:done': {
-            setRow('scrape:' + data.source, 'done',
-              `${data.count} postings (running total: ${data.postings_so_far})`);
-            break;
-          }
-          case 'scrape:source:error': {
-            setRow('scrape:' + data.source, 'error', escapeHTML(data.error));
-            break;
-          }
-          case 'scrape:source:skipped': {
-            setRow('scrape:' + data.source, 'skipped', escapeHTML(data.error));
-            break;
-          }
-          case 'scrape:done': {
-            setRow('scrape', 'done', `Total postings collected: ${data.total}`);
-            break;
-          }
-
-          case 'dedupe:start': {
-            ensureRow('dedupe', '3. Dedupe');
-            setRow('dedupe', 'running', `${data.input} postings to deduplicate…`);
-            break;
-          }
-          case 'dedupe:done': {
-            setRow('dedupe', 'done',
-              `${data.before} → ${data.after} (removed ${data.removed})`);
-            break;
-          }
-
-          case 'extract:start': {
-            ensureRow('extract', '4. Extract');
-            const provider = data.provider === 'mock'
-              ? 'mock (heuristic)'
-              : `${data.provider} / ${data.model ?? '?'}`;
-            if (data.provider === 'qwen_service') {
-              setRow('extract', 'running',
-                `<div class="space-y-1">
-                  <div>0/${data.postings} postings analysed (0%)</div>
-                  <div class="text-[11px] text-slate-500">Using <span class="mono">${escapeHTML(provider)}</span></div>
-                  <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-                    <div class="bar h-full" style="width: 0%"></div>
-                  </div>
-                </div>`);
-            } else {
-              setRow('extract', 'running',
-                `Asking <span class="mono">${escapeHTML(provider)}</span> to analyse ${data.postings} posting(s)…`);
-            }
-            break;
-          }
           case 'extract:progress': {
-            ensureRow('extract', '4. Extract');
             const pct = data.total ? Math.round((data.completed / data.total) * 100) : 0;
             if (data.phase === 'skill_cleanup') {
-              setRow('extract', 'running',
-                `<div class="space-y-1">
-                  <div>${data.completed}/${data.total} postings analysed (100%) · cleaning skill list…</div>
-                  <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-                    <div class="bar h-full" style="width: 100%"></div>
-                  </div>
-                </div>`);
+              setRow('extract', 'running', progressBlock('Applying skill de-duplication and canonical naming.', 100, `${data.skills} merged skill candidates.`));
               break;
             }
             if (data.phase === 'synthesis') {
-              setRow('extract', 'running',
-                `<div class="space-y-1">
-                  <div>${data.completed}/${data.total} postings analysed (100%) · synthesising final report…</div>
-                  <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-                    <div class="bar h-full" style="width: 100%"></div>
-                  </div>
-                </div>`);
+              setRow('extract', 'running', progressBlock('Generating final summary, responsibilities, and nice-to-have items.', 100, 'Using the configured finalizer after skill extraction.'));
               break;
             }
-            const title = data.title ? ` · ${escapeHTML(data.title)}` : '';
-            setRow('extract', 'running',
-              `<div class="space-y-1">
-                <div>${data.completed}/${data.total} postings analysed (${pct}%)${title}</div>
-                <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-                  <div class="bar h-full" style="width: ${pct}%"></div>
-                </div>
-              </div>`);
+            const title = data.title ? ` Latest: ${escapeHTML(data.title)}` : '';
+            setRow('extract', 'running', progressBlock(`${data.completed}/${data.total} postings analysed (${pct}%).${title}`, pct));
             break;
           }
-          case 'extract:done': {
-            setRow('extract', 'done',
-              `${data.top_skills} skills · ${data.responsibilities} responsibilities · ${data.nice_to_have} nice-to-have`);
+          case 'extract:done':
+            setRow('extract', 'done', `${data.top_skills} skills, ${data.responsibilities} responsibilities, ${data.nice_to_have} nice-to-have items.`);
             break;
-          }
 
-          case 'result': {
-            ensureRow('result', '5. Result');
-            setRow('result', 'done', 'Rendering report…');
-            renderResult(data);
+          case 'result':
             setStatus('done', 'emerald');
+            setRow('result', 'done', 'Final report is ready.');
+            renderResult(data);
             break;
-          }
 
           case 'fatal': {
             setStatus('failed', 'rose');
-            const id = 'fatal:' + (data.stage ?? 'unknown');
-            ensureRow(id, `✗ Fatal during ${data.stage ?? 'workflow'}`);
+            const id = `fatal:${data.stage ?? 'workflow'}`;
+            ensureRow(id, `Failed: ${data.stage ?? 'workflow'}`);
             const trace = data.traceback
-              ? `<details class="mt-1"><summary class="cursor-pointer text-slate-500">Traceback</summary><pre class="mono mt-1 whitespace-pre-wrap text-[11px] text-slate-400">${escapeHTML(data.traceback)}</pre></details>`
+              ? `<details class="mt-2"><summary class="cursor-pointer text-zinc-500">Traceback</summary><pre class="mono mt-2 whitespace-pre-wrap text-[11px] text-zinc-500">${escapeHTML(data.traceback)}</pre></details>`
               : '';
-            setRow(id, 'error', `${escapeHTML(data.error ?? 'unknown error')}${trace}`);
+            setRow(id, 'error', `${escapeHTML(data.error ?? 'Unknown error')}${trace}`);
             break;
           }
         }
       }
 
-      // ---------------------------------------------------------- render result
-      function renderResult(r) {
+      function renderResult(result) {
+        $('empty_state').classList.add('hidden');
         $('result_section').classList.remove('hidden');
-        $('summary_text').textContent = r.summary || '(no summary)';
-        $('summary_count').textContent = r.postings_analysed;
+        $('summary_text').textContent = result.summary || 'No summary returned.';
+        $('summary_count').textContent = result.postings_analysed ?? 0;
 
-        const maxFreq = Math.max(1, ...r.top_skills.map((s) => s.frequency));
-        $('skills').innerHTML = r.top_skills.map((s) => {
-          const pct = Math.round((s.frequency / maxFreq) * 100);
-          return `
-            <li class="text-sm">
-              <div class="flex items-center justify-between gap-3">
-                <div class="flex items-center gap-2 min-w-0">
-                  <span class="font-medium text-slate-100 truncate">${escapeHTML(s.name)}</span>
-                  <span class="text-[10px] uppercase tracking-wide text-slate-500">${escapeHTML(s.category)}</span>
-                </div>
-                <span class="mono text-xs text-slate-400">freq ${s.frequency} · imp ${s.importance.toFixed(2)}</span>
-              </div>
-              <div class="mt-1 h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div class="bar h-full" style="width: ${pct}%"></div>
-              </div>
-            </li>`;
-        }).join('') || '<li class="text-sm text-slate-500">No skills extracted.</li>';
+        const maxFreq = Math.max(1, ...result.top_skills.map((skill) => skill.frequency || 0));
+        $('skills').innerHTML =
+          result.top_skills
+            .map((skill) => {
+              const pct = Math.round(((skill.frequency || 0) / maxFreq) * 100);
+              const evidence = (skill.evidence || []).slice(0, 2).map((item) => `<span>${escapeHTML(item)}</span>`).join('');
+              return `
+                <li class="rounded-2xl border border-white/10 bg-black/30 p-3">
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-medium text-white">${escapeHTML(skill.name)}</span>
+                        <span class="rounded-full bg-white/5 px-2 py-0.5 text-[11px] uppercase tracking-wide text-zinc-500">${escapeHTML(skill.category)}</span>
+                      </div>
+                      ${evidence ? `<div class="mt-2 flex flex-col gap-1 text-xs leading-5 text-zinc-500">${evidence}</div>` : ''}
+                    </div>
+                    <span class="mono shrink-0 text-xs text-zinc-500">freq ${skill.frequency} | imp ${(skill.importance ?? 0).toFixed(2)}</span>
+                  </div>
+                  <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                    <div class="bar h-full rounded-full" style="width:${pct}%"></div>
+                  </div>
+                </li>`;
+            })
+            .join('') || '<li class="text-sm text-zinc-500">No skills extracted.</li>';
 
-        const list = (sel, items) => {
-          $(sel).innerHTML = items.length
-            ? items.map((x) => `<li>${escapeHTML(x)}</li>`).join('')
-            : '<li class="text-slate-500 list-none">—</li>';
+        const renderList = (id, items) => {
+          $(id).innerHTML = items && items.length
+            ? items.map((item) => `<li class="rounded-2xl border border-white/10 bg-black/30 px-3 py-2">${escapeHTML(item)}</li>`).join('')
+            : '<li class="rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-zinc-500">No items returned.</li>';
         };
-        list('responsibilities', r.core_responsibilities);
-        list('nice_to_have', r.nice_to_have);
+        renderList('responsibilities', result.core_responsibilities || []);
+        renderList('nice_to_have', result.nice_to_have || []);
 
-        $('postings').innerHTML = r.postings.map((p) => `
-          <li class="py-3 first:pt-0 last:pb-0">
-            <div class="flex items-baseline justify-between gap-3">
-              <a href="${escapeHTML(p.url)}" target="_blank" rel="noopener"
-                 class="text-sm font-medium text-cyan-300 hover:text-cyan-200 hover:underline truncate">
-                ${escapeHTML(p.title)}
-              </a>
-              <span class="mono text-[11px] text-slate-500 shrink-0">${escapeHTML(p.source)}</span>
-            </div>
-            <div class="text-xs text-slate-400 mt-0.5">
-              ${escapeHTML(p.company || '—')} · ${escapeHTML(p.location || '—')}
-            </div>
-          </li>`).join('') || '<li class="py-3 text-sm text-slate-500">No postings.</li>';
+        $('postings').innerHTML =
+          (result.postings || [])
+            .map((posting) => `
+              <li class="py-3 first:pt-0 last:pb-0">
+                <div class="flex items-start justify-between gap-3">
+                  <a href="${escapeHTML(posting.url)}" target="_blank" rel="noopener" class="line-clamp-2 text-sm font-medium text-white hover:text-zinc-300">
+                    ${escapeHTML(posting.title)}
+                  </a>
+                  <span class="mono shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-zinc-500">${escapeHTML(posting.source)}</span>
+                </div>
+                <div class="mt-1 text-xs text-zinc-500">${escapeHTML(posting.company || 'Unknown')} | ${escapeHTML(posting.location || 'n/a')}</div>
+              </li>`)
+            .join('') || '<li class="py-3 text-sm text-zinc-500">No postings.</li>';
       }
 
-      // ---------------------------------------------------------- SSE plumbing
-      // Browsers' built-in EventSource only supports GET; we POST + fetch + parse.
       async function streamAnalysis(payload, onEvent) {
         const response = await fetch('/analyze/stream', {
           method: 'POST',
@@ -470,8 +506,6 @@
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        // SSE: events are separated by a blank line; each event has multiple
-        // "key: value" lines. We accumulate `event:` and `data:` per frame.
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
@@ -480,72 +514,77 @@
           while ((sep = buffer.indexOf('\n\n')) !== -1) {
             const frame = buffer.slice(0, sep);
             buffer = buffer.slice(sep + 2);
-            let evType = 'message';
+            let eventType = 'message';
             const dataLines = [];
             for (const line of frame.split('\n')) {
-              if (line.startsWith('event:')) evType = line.slice(6).trim();
+              if (line.startsWith('event:')) eventType = line.slice(6).trim();
               else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
             }
-            if (dataLines.length === 0) continue;
+            if (!dataLines.length) continue;
             let data;
-            try { data = JSON.parse(dataLines.join('\n')); }
-            catch { data = { raw: dataLines.join('\n') }; }
-            onEvent(evType, data);
+            try {
+              data = JSON.parse(dataLines.join('\n'));
+            } catch {
+              data = { raw: dataLines.join('\n') };
+            }
+            onEvent(eventType, data);
           }
         }
       }
 
-      // ---------------------------------------------------------- bootstrap
       async function loadSources() {
         try {
-          const sources = await fetch('/sources').then((r) => r.json());
-          $('sources').innerHTML = sources.map((s) => `
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" name="src" value="${escapeHTML(s.id)}"
-                     ${s.id !== 'mock' && s.configured ? 'checked' : ''}
-                     ${s.configured === false ? 'disabled' : ''}
-                     class="h-4 w-4 rounded border-slate-600 bg-slate-950 text-cyan-400 focus:ring-cyan-400" />
-              <span>${escapeHTML(s.name)}</span>
-              ${s.configured === false ? `<span class="text-[10px] text-amber-300">(${escapeHTML(s.disabled_reason || 'not configured')})</span>` : ''}
-              ${s.requires_browser ? '<span class="text-[10px] text-amber-300">(headless browser)</span>' : ''}
-            </label>`).join('');
-        } catch (e) {
-          $('sources').innerHTML =
-            '<div class="text-xs text-rose-300">Failed to load sources.</div>';
+          const sources = await fetch('/sources').then((response) => response.json());
+          $('sources').innerHTML = sources
+            .map((source) => `
+              <label class="mr-2 inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs">
+                <input
+                  type="checkbox"
+                  name="src"
+                  value="${escapeHTML(source.id)}"
+                  ${source.id !== 'mock' && source.configured ? 'checked' : ''}
+                  ${source.configured === false ? 'disabled' : ''}
+                  class="h-3.5 w-3.5 rounded border-zinc-700 bg-black text-white focus:ring-white/30"
+                />
+                <span>${escapeHTML(source.id)}</span>
+              </label>`)
+            .join('');
+        } catch {
+          $('sources').innerHTML = '<span class="text-xs text-rose-300">Failed to load sources.</span>';
         }
       }
+
       loadSources();
 
-      $('form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const sources = [...document.querySelectorAll('input[name="src"]:checked')]
-          .map((el) => el.value);
-        if (sources.length === 0) {
+      $('form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const sources = [...document.querySelectorAll('input[name="src"]:checked')].map((el) => el.value);
+        if (!sources.length) {
           alert('Pick at least one source.');
           return;
         }
         const payload = {
-          job_title:      $('job_title').value.trim(),
-          location:       $('location').value.trim() || null,
+          job_title: $('job_title').value.trim(),
+          location: $('location').value.trim() || null,
           sources,
           max_per_source: Number($('max_per_source').value) || null,
         };
 
         resetUI();
-        setStatus('running…', 'indigo');
+        setStatus('running', 'white');
         $('run').disabled = true;
-        $('run').textContent = 'Running…';
+        $('run').textContent = 'Running...';
 
         try {
           await streamAnalysis(payload, handleEvent);
-        } catch (err) {
+        } catch (error) {
           handleEvent('fatal', {
             stage: 'transport',
-            error: `${err.name || 'Error'}: ${err.message || String(err)}`,
+            error: `${error.name || 'Error'}: ${error.message || String(error)}`,
           });
         } finally {
           $('run').disabled = false;
-          $('run').textContent = 'Run workflow';
+          $('run').textContent = 'Run analysis';
         }
       });
     </script>

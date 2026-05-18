@@ -56,6 +56,11 @@ For small local Qwen adapters, `QWEN_EXTRACTION_TASK=skills_only` is the
 recommended mode: Qwen extracts only `top_skills` from each JD, then the
 finalizer synthesizes summary and responsibilities from aggregated skills plus
 compact evidence candidates.
+The current application-ready local model is:
+`model_lab/models/qwen3-1_7b-skill-extractor-qlora-r16a32-skills-only`.
+The application also applies the saved deterministic skill de-duplication layer
+from `model_lab/data/skill_canonicalization/skill_canonicalization.mapping.json`
+before any optional LLM finalizer cleanup.
 Without a configured provider the pipeline silently falls back to a
 keyword-frequency heuristic so analysis always returns something.
 
@@ -105,6 +110,27 @@ uv run ai-job-analyzer serve-qwen
 # optional hybrid app mode (requires OPENAI_API_KEY)
 LLM_PROVIDER=qwen_service FINALIZER_PROVIDER=openai uv run ai-job-analyzer serve --reload
 ```
+
+To run the app with the latest trained local Qwen adapter, configure:
+
+```bash
+QWEN_BASE_MODEL=Qwen/Qwen3-1.7B
+QWEN_ADAPTER_PATH=model_lab/models/qwen3-1_7b-skill-extractor-qlora-r16a32-skills-only
+QWEN_EXTRACTION_TASK=skills_only
+QWEN_MAX_NEW_TOKENS=1200
+SKILL_CANONICALIZATION_MAPPING_PATH=model_lab/data/skill_canonicalization/skill_canonicalization.mapping.json
+```
+
+Then start the Qwen model service and the main app:
+
+```bash
+uv run ai-job-analyzer serve-qwen
+LLM_PROVIDER=qwen_service FINALIZER_PROVIDER=openai uv run ai-job-analyzer serve --reload
+```
+
+`FINALIZER_PROVIDER=openai` gives the best final summary/responsibility text
+when an OpenAI key is configured. Use `FINALIZER_PROVIDER=qwen_service` for a
+fully local run.
 
 Qwen fine-tuning defaults to `Qwen/Qwen3-1.7B`. To generate supervised training
 labels, first collect unlabeled seed postings:
@@ -156,7 +182,7 @@ uv run python model_lab/scripts/evaluate_skill_extractors.py --provider openai -
 uv run python model_lab/scripts/render_eval_report.py model_lab/eval_runs/*.metrics.json --output model_lab/eval_runs/report.html
 ```
 
-### Current extraction baseline
+### QLoRA Evaluation Results
 
 The current held-out test split contains 299 labeled job postings. Metrics below
 compare model-predicted `top_skills` against OpenAI teacher labels. Precision,
@@ -171,6 +197,7 @@ text.
 | `qwen3-1_7b-base` | `Qwen/Qwen3-1.7B` | 295 / 299 | 4 | 0.324 | 0.171 | 0.224 | 0.997 | 1,930 |
 | `gpt-5-mini` | `gpt-5-mini` | 299 / 299 | 0 | 0.326 | 0.342 | 0.334 | 0.982 | 3,902 |
 | `qwen3-1_7b-qlora-r16a32-compact` | `Qwen/Qwen3-1.7B + QLoRA` | 275 / 299 | 24 | 0.409 | 0.235 | 0.299 | 0.999 | 1,959 |
+| `qwen3-1_7b-qlora-r16a32-skills-only` | `Qwen/Qwen3-1.7B + skills-only QLoRA` | 297 / 299 | 2 | 0.416 | 0.251 | 0.313 | 1.000 | 2,232 |
 
 Interpretation: pure Qwen3-1.7B is conservative and highly faithful, but it
 misses many teacher-labeled skills, which lowers recall and F1. GPT-5 mini is
@@ -186,6 +213,19 @@ full structured outputs are still malformed. This suggests the 1.7B model is a
 better fit for a narrower skills-only extractor, with summary and responsibility
 synthesis handled by a stronger finalizer.
 
+The skills-only QLoRA adapter keeps the same scoring standard but narrows the
+generation task to `top_skills` only. It improves strict F1 over both Qwen
+baselines and reduces the failure rate to 2 / 299. In the application, summary
+and responsibility fields are generated later by the configured finalizer from
+aggregated skills plus compact responsibility/nice-to-have candidates.
+
+Headline result: the latest skills-only QLoRA adapter is the best local Qwen
+run so far. It raises raw strict F1 from `0.224` to `0.313` over base Qwen,
+raises semantic F1 from `0.310` to `0.414`, and keeps evidence faithfulness at
+approximately `1.000`. GPT-5 mini remains stronger overall because its recall
+is much higher, but the QLoRA experiment shows a clear, measurable local-model
+improvement.
+
 To reduce duplicate skill entities across jobs and models, run the global
 canonicalization pass:
 
@@ -198,7 +238,8 @@ This writes one reusable mapping to
 canonicalized copies under `model_lab/data/canonicalized/` and
 `model_lab/eval_runs/canonicalized/`. Using this conservative shared mapping,
 the GPT-5 mini strict-match F1 rises from `0.334` to `0.380`, and the compact
-QLoRA F1 rises from `0.299` to `0.320`.
+QLoRA F1 rises from `0.299` to `0.320`. The skills-only QLoRA adapter reaches
+`0.342` canonicalized strict F1 with the same shared mapping.
 
 For a fairer semantic score, run the cached LLM-as-judge evaluator:
 
@@ -206,7 +247,8 @@ For a fairer semantic score, run the cached LLM-as-judge evaluator:
 uv run python model_lab/scripts/evaluate_semantic_skill_matches.py \
   model_lab/eval_runs/canonicalized/qwen3-1_7b-base.predictions.jsonl \
   model_lab/eval_runs/canonicalized/gpt-5-mini.predictions.jsonl \
-  model_lab/eval_runs/canonicalized/qwen3-1_7b-qlora-r16a32-compact.predictions.jsonl
+  model_lab/eval_runs/canonicalized/qwen3-1_7b-qlora-r16a32-compact.predictions.jsonl \
+  model_lab/eval_runs/canonicalized/qwen3-1_7b-qlora-r16a32-skills-only.predictions.jsonl
 ```
 
 The judge only reviews plausible unmatched skill pairs and stores decisions in
@@ -218,10 +260,12 @@ The judge only reviews plausible unmatched skill pairs and stores decisions in
 | `qwen3-1_7b-base-semantic` | 0.449 | 0.236 | 0.310 | 0.245 |
 | `gpt-5-mini-semantic` | 0.559 | 0.587 | 0.572 | 0.380 |
 | `qwen3-1_7b-qlora-r16a32-compact-semantic` | 0.538 | 0.309 | 0.392 | 0.320 |
+| `qwen3-1_7b-qlora-r16a32-skills-only-semantic` | 0.549 | 0.332 | 0.414 | 0.342 |
 
 For a local visual report after running the evaluation commands, open
-`model_lab/eval_runs/report.html`. For the semantic judge report, open
-`model_lab/eval_runs/semantic/report.html`.
+`model_lab/eval_runs/report.html`. For the canonicalized strict report, open
+`model_lab/eval_runs/canonicalized/report.html`. For the semantic judge report,
+open `model_lab/eval_runs/semantic/report.html`.
 
 ## License
 

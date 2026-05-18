@@ -265,3 +265,41 @@ Business pipeline decision:
   candidates extracted from the postings.
 - This keeps the app output complete without sending all raw job descriptions
   to the finalizer for large batches.
+
+Result:
+
+- Raw strict evaluation:
+  - successful samples: `297 / 299`
+  - failed samples: `2`
+  - failure rate: `0.0067`
+  - skill precision: `0.416`
+  - skill recall: `0.251`
+  - skill F1: `0.313`
+  - faithfulness proxy: `1.000`
+- Canonicalized strict evaluation:
+  - skill precision: `0.454`
+  - skill recall: `0.275`
+  - skill F1: `0.342`
+- Semantic judge evaluation:
+  - skill precision: `0.549`
+  - skill recall: `0.332`
+  - skill F1: `0.414`
+  - faithfulness proxy: `1.000`
+
+Comparison:
+
+| Run | Semantic precision | Semantic recall | Semantic F1 | Failure rate |
+| --- | ---: | ---: | ---: | ---: |
+| `qwen3-1_7b-base` | `0.449` | `0.236` | `0.310` | `0.013` |
+| `gpt-5-mini` | `0.559` | `0.586` | `0.572` | `0.000` |
+| `qwen3-1_7b-qlora-r16a32-compact` | `0.539` | `0.310` | `0.393` | `0.080` |
+| `qwen3-1_7b-qlora-r16a32-skills-only` | `0.549` | `0.332` | `0.414` | `0.0067` |
+
+Interpretation:
+
+- The skills-only adapter is the best local Qwen run so far: it improves over
+  base Qwen and the compact full-output adapter on semantic F1, while reducing
+  schema/runtime failures sharply.
+- It still does not match GPT-5 mini recall. The next improvement should focus
+  on higher-recall labels/prompts or a second-pass skill expansion/canonicalizer,
+  not on forcing the 1.7B model to generate summaries.

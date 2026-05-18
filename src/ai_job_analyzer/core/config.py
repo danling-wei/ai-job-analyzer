@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     finalizer_provider: Literal["qwen_service", "openai", "mock"] = "qwen_service"
     finalizer_model: str = "gpt-5.2"
     finalizer_temperature: float = 0.0
+    skill_canonicalization_mapping_path: str | None = (
+        "model_lab/data/skill_canonicalization/skill_canonicalization.mapping.json"
+    )
 
     openai_api_key: str | None = None
     openai_base_url: str | None = None  # for OpenAI-compatible endpoints
