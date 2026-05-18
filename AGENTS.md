@@ -362,3 +362,20 @@ When you (human or agent) make a change that affects:
 - **decisions still pending** → keep §8 fresh.
 
 Bump the `Last updated:` line at the top.
+
+---
+
+## 10. Latest model-lab status
+
+- Qwen default base model is now `Qwen/Qwen3-1.7B` for practical local
+  evaluation and QLoRA experiments.
+- Generated SerpApi seed postings and OpenAI teacher labels are available for
+  model-lab workflows.
+- Baseline evaluation has been run on the same 299-row test split:
+  `qwen3-1_7b-base` reached precision 0.324, recall 0.171, F1 0.224,
+  faithfulness proxy 0.997, with 4 failed samples; `gpt-5-mini` reached
+  precision 0.326, recall 0.342, F1 0.334, faithfulness proxy 0.982, with 0
+  failed samples.
+- The current evaluation is accurate for strict normalized skill-name overlap
+  and deterministic evidence-support proxy, but it is not yet a semantic
+  LLM-as-judge score.

@@ -9,12 +9,17 @@ multiple job boards and uses an LLM to extract the **key tech stack** and
 
 ## Status
 
-**M1.7 in progress.** Single-page frontend at `/ui/` with a **live workflow
+**M1.12 in progress.** Single-page frontend at `/ui/` with a **live workflow
 timeline** that streams every stage of the agent (plan → scrape per source
 → dedupe → extract → result) over Server-Sent Events. The noisy public/RSS
 demo sources have been replaced with **SerpApi Google Jobs** as the API-backed
 source. The LLM falls back to a safe mock when no API key is configured, so the
 project still runs offline for mock-source demos.
+
+The model-lab workflow now includes a generated SerpApi seed dataset, OpenAI
+teacher labels, QLoRA training scripts, and a repeatable evaluation harness for
+comparing pure Qwen, OpenAI baselines, and future QLoRA adapters on the same
+held-out test split.
 
 ## Requirements
 
@@ -133,6 +138,31 @@ uv run python model_lab/scripts/split_qwen_dataset.py
 uv run python model_lab/scripts/evaluate_skill_extractors.py --provider openai --openai-model gpt-5-mini --run-name gpt-5-mini
 uv run python model_lab/scripts/render_eval_report.py model_lab/eval_runs/*.metrics.json --output model_lab/eval_runs/report.html
 ```
+
+### Current extraction baseline
+
+The current held-out test split contains 299 labeled job postings. Metrics below
+compare model-predicted `top_skills` against OpenAI teacher labels. Precision,
+recall, and F1 use normalized skill-name overlap, so they are intentionally
+strict and do not count semantic near-matches unless they normalize to the same
+key. `faithfulness_proxy` is a lightweight evidence-support check: it counts
+predicted skills whose name or evidence snippet is supported by the posting
+text.
+
+| Run | Model | Successful samples | Failures | Skill precision | Skill recall | Skill F1 | Faithfulness proxy | Predicted skills |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `qwen3-1_7b-base` | `Qwen/Qwen3-1.7B` | 295 / 299 | 4 | 0.324 | 0.171 | 0.224 | 0.997 | 1,930 |
+| `gpt-5-mini` | `gpt-5-mini` | 299 / 299 | 0 | 0.326 | 0.342 | 0.334 | 0.982 | 3,902 |
+
+Interpretation: pure Qwen3-1.7B is conservative and highly faithful, but it
+misses many teacher-labeled skills, which lowers recall and F1. GPT-5 mini is
+more complete and structurally stable, with roughly double the extracted skill
+coverage and zero failures. This gives the QLoRA experiment a clear target:
+increase Qwen recall/F1 while preserving high faithfulness and a low failure
+rate.
+
+For a local visual report after running the evaluation commands, open
+`model_lab/eval_runs/report.html`.
 
 ## License
 
