@@ -50,7 +50,7 @@ class EvalOutput(BaseModel):
     summary: str = ""
 
 
-SYSTEM_PROMPT = """You extract a job-seeker skill-gap checklist from one job posting.
+FULL_ANALYSIS_SYSTEM_PROMPT = """You extract a job-seeker skill-gap checklist from one job posting.
 
 Return a precise JSON object with:
 - top_skills: concrete learnable tools, platforms, frameworks, languages, methods, and role-specific domains.
@@ -60,6 +60,20 @@ Return a precise JSON object with:
 
 Rules:
 - Prefer job-seeker skill-gap items that can be learned and verified in a portfolio.
+- Do not include generic labels such as AI, machine learning, cloud platforms, APIs, collaboration, communication, project management, or software development unless the posting names a concrete subskill.
+- Evidence must be copied from the posting and kept short.
+- Deduplicate near-synonyms into one canonical skill name.
+- If a skill is not supported by the posting, omit it.
+"""
+
+SKILLS_ONLY_SYSTEM_PROMPT = """You extract a high-recall job-seeker skill-gap checklist from one job posting.
+
+Return a precise JSON object with exactly one top-level key:
+- top_skills: concrete learnable tools, platforms, frameworks, languages, methods, standards, workflows, and role-specific domains.
+
+Rules:
+- Prefer job-seeker skill-gap items that can be learned and verified in a portfolio.
+- Extract all supported concrete skills, not only the most obvious few.
 - Do not include generic labels such as AI, machine learning, cloud platforms, APIs, collaboration, communication, project management, or software development unless the posting names a concrete subskill.
 - Evidence must be copied from the posting and kept short.
 - Deduplicate near-synonyms into one canonical skill name.
@@ -198,6 +212,41 @@ def _eval_output_schema() -> dict[str, Any]:
     }
 
 
+def _skills_only_output_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["top_skills"],
+        "properties": {
+            "top_skills": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["name", "category", "importance", "evidence"],
+                    "properties": {
+                        "name": {"type": "string"},
+                        "category": {
+                            "type": "string",
+                            "enum": [
+                                "language",
+                                "framework",
+                                "tool",
+                                "platform",
+                                "domain",
+                                "soft_skill",
+                                "other",
+                            ],
+                        },
+                        "importance": {"type": "number", "minimum": 0, "maximum": 1},
+                        "evidence": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+            },
+        },
+    }
+
+
 def _row_id(row: dict[str, Any], index: int) -> str:
     posting = row["postings"][0]
     return str(posting.get("url") or posting.get("source_id") or index)
@@ -210,12 +259,13 @@ async def _extract_openai(
     model: str,
     api_key: str,
     base_url: str,
+    task: str,
 ) -> EvalOutput:
     posting = row["postings"][0]
     user = "\n".join(
         [
             f"Target role: {row.get('job_title', 'Unknown')}",
-            "Maximum top_skills: 15",
+            f"Maximum top_skills: {20 if task == 'skills_only' else 15}",
             "",
             "Posting:",
             "",
@@ -228,7 +278,14 @@ async def _extract_openai(
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "system",
+                "content": (
+                    SKILLS_ONLY_SYSTEM_PROMPT
+                    if task == "skills_only"
+                    else FULL_ANALYSIS_SYSTEM_PROMPT
+                ),
+            },
             {"role": "user", "content": user},
         ],
         "response_format": {
@@ -236,7 +293,11 @@ async def _extract_openai(
             "json_schema": {
                 "name": "skill_extraction_eval_output",
                 "strict": True,
-                "schema": _eval_output_schema(),
+                "schema": (
+                    _skills_only_output_schema()
+                    if task == "skills_only"
+                    else _eval_output_schema()
+                ),
             },
         },
     }
@@ -250,7 +311,10 @@ async def _extract_openai(
     )
     response.raise_for_status()
     content = response.json()["choices"][0]["message"]["content"]
-    return EvalOutput.model_validate_json(content)
+    output = json.loads(content)
+    if task == "skills_only":
+        return EvalOutput(top_skills=[EvalSkill.model_validate(item) for item in output.get("top_skills", [])])
+    return EvalOutput.model_validate(output)
 
 
 async def _extract_qwen_service(
@@ -327,6 +391,7 @@ async def _run_prediction(
                             model=args.openai_model,
                             api_key=str(api_key),
                             base_url=args.openai_base_url,
+                            task=args.task,
                         )
                     else:
                         output = await _extract_qwen_service(
@@ -343,6 +408,7 @@ async def _run_prediction(
                         "model": (
                             args.openai_model if args.provider == "openai" else args.qwen_model_name
                         ),
+                        "task": args.task,
                         "job_title": row.get("job_title", "Unknown"),
                         "error": repr(exc),
                     }
@@ -358,6 +424,7 @@ async def _run_prediction(
                     "model": args.openai_model
                     if args.provider == "openai"
                     else args.qwen_model_name,
+                    "task": args.task,
                     "latency_seconds": round(time.perf_counter() - started, 3),
                     "job_title": row.get("job_title", "Unknown"),
                     "prediction": output.model_dump(mode="json"),
@@ -453,21 +520,26 @@ async def _main_async(args: argparse.Namespace) -> None:
     predictions = await _run_prediction(rows=rows, args=args, prediction_path=prediction_path)
     metrics = _metrics_from_predictions(predictions)
     error_path = prediction_path.with_suffix(".errors.jsonl")
-    errors = (
-        [line for line in error_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-        if error_path.exists()
-        else []
-    )
+    error_ids: set[str] = set()
+    if error_path.exists():
+        for line in error_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                error_ids.add(str(json.loads(line).get("id") or line))
+            except json.JSONDecodeError:
+                error_ids.add(line)
     metrics.update(
         {
             "run_name": args.run_name,
             "provider": args.provider,
-            "model": args.openai_model if args.provider == "openai" else args.qwen_model_name,
+                        "model": args.openai_model if args.provider == "openai" else args.qwen_model_name,
+                        "task": args.task,
             "dataset": args.dataset,
             "prediction_path": str(prediction_path),
             "requested_samples": len(rows),
-            "failed_samples": len(errors),
-            "failure_rate": len(errors) / len(rows) if rows else 0.0,
+            "failed_samples": len(error_ids),
+            "failure_rate": len(error_ids) / len(rows) if rows else 0.0,
         }
     )
     metrics_path.write_text(
@@ -486,6 +558,7 @@ def main() -> None:
     parser.add_argument("--openai-base-url", default="https://api.openai.com/v1")
     parser.add_argument("--qwen-service-url", default="http://127.0.0.1:8010")
     parser.add_argument("--qwen-model-name", default="Qwen/Qwen3-1.7B")
+    parser.add_argument("--task", choices=["full_analysis", "skills_only"], default="full_analysis")
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--timeout-seconds", type=float, default=240.0)
     parser.add_argument("--limit", type=int, default=None)

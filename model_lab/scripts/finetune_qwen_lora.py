@@ -15,13 +15,22 @@ import sys
 from pathlib import Path
 from typing import Any
 
-SYSTEM_PROMPT = (
+FULL_ANALYSIS_SYSTEM_PROMPT = (
     "You extract a job-seeker skill-gap checklist from one job posting. "
     "Return only one valid JSON object with exactly these top-level keys: "
     "top_skills, core_responsibilities, nice_to_have, summary. "
     "Top skills must be concrete learnable tools, platforms, frameworks, "
     "languages, methods, and role-specific domains. Evidence must be short "
     "verbatim snippets from the posting."
+)
+
+SKILLS_ONLY_SYSTEM_PROMPT = (
+    "You extract a high-recall job-seeker skill-gap checklist from one job posting. "
+    "Return only one valid JSON object with exactly one top-level key: top_skills. "
+    "Top skills must be concrete learnable tools, platforms, frameworks, languages, "
+    "methods, standards, workflows, and role-specific domains. Evidence must be "
+    "short verbatim snippets from the posting. Extract all supported concrete skills, "
+    "not only the most obvious few."
 )
 
 
@@ -33,7 +42,13 @@ def _compact_text(value: Any, *, max_chars: int) -> str:
     return text[: max_chars - 3].rstrip() + "..."
 
 
-def _compact_output(output: dict[str, Any]) -> dict[str, Any]:
+def _compact_output(
+    output: dict[str, Any],
+    *,
+    task: str,
+    max_skills: int,
+    evidence_per_skill: int,
+) -> dict[str, Any]:
     compact_skills: list[dict[str, Any]] = []
     for skill in output.get("top_skills") or []:
         if not isinstance(skill, dict):
@@ -42,7 +57,7 @@ def _compact_output(output: dict[str, Any]) -> dict[str, Any]:
             _compact_text(item, max_chars=120)
             for item in skill.get("evidence") or []
             if str(item or "").strip()
-        ][:1]
+        ][:evidence_per_skill]
         compact_skills.append(
             {
                 "name": _compact_text(skill.get("name"), max_chars=80),
@@ -51,8 +66,11 @@ def _compact_output(output: dict[str, Any]) -> dict[str, Any]:
                 "evidence": evidence,
             }
         )
-        if len(compact_skills) >= 10:
+        if len(compact_skills) >= max_skills:
             break
+
+    if task == "skills_only":
+        return {"top_skills": compact_skills}
 
     return {
         "top_skills": compact_skills,
@@ -70,7 +88,13 @@ def _compact_output(output: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _format_example(row: dict[str, Any]) -> dict[str, str]:
+def _format_example(
+    row: dict[str, Any],
+    *,
+    task: str,
+    max_skills: int,
+    evidence_per_skill: int,
+) -> dict[str, str]:
     postings = row.get("postings")
     if not isinstance(postings, list):
         raise ValueError("Each row must include a postings list.")
@@ -94,26 +118,50 @@ def _format_example(row: dict[str, Any]) -> dict[str, str]:
     user = "\n".join(
         [
             f"Target role: {row.get('job_title', 'Unknown')}",
-            "Maximum top_skills: 10",
-            "Maximum evidence snippets per skill: 1",
+            f"Maximum top_skills: {max_skills}",
+            f"Maximum evidence snippets per skill: {evidence_per_skill}",
+            "Extract supported concrete skills with high recall.",
             "",
             "Postings:",
             "",
             chr(10).join(chunks),
         ]
     )
-    assistant = json.dumps(_compact_output(output), ensure_ascii=False, separators=(",", ":"))
-    return {"system": SYSTEM_PROMPT, "user": user, "assistant": assistant}
+    assistant = json.dumps(
+        _compact_output(
+            output,
+            task=task,
+            max_skills=max_skills,
+            evidence_per_skill=evidence_per_skill,
+        ),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    system = SKILLS_ONLY_SYSTEM_PROMPT if task == "skills_only" else FULL_ANALYSIS_SYSTEM_PROMPT
+    return {"system": system, "user": user, "assistant": assistant}
 
 
-def _read_training_rows(path: Path) -> list[dict[str, str]]:
+def _read_training_rows(
+    path: Path,
+    *,
+    task: str,
+    max_skills: int,
+    evidence_per_skill: int,
+) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     skipped = 0
     for line_number, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
         if not line.strip():
             continue
         try:
-            rows.append(_format_example(json.loads(line)))
+            rows.append(
+                _format_example(
+                    json.loads(line),
+                    task=task,
+                    max_skills=max_skills,
+                    evidence_per_skill=evidence_per_skill,
+                )
+            )
         except Exception as exc:
             skipped += 1
             print(
@@ -137,6 +185,9 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--grad-accum", type=int, default=8)
     parser.add_argument("--max-seq-length", type=int, default=4096)
+    parser.add_argument("--task", choices=["full_analysis", "skills_only"], default="full_analysis")
+    parser.add_argument("--max-skills", type=int, default=None)
+    parser.add_argument("--evidence-per-skill", type=int, default=1)
     parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=32)
     parser.add_argument("--lora-dropout", type=float, default=0.05)
@@ -154,7 +205,13 @@ def main() -> None:
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from trl import SFTConfig, SFTTrainer
 
-    rows = _read_training_rows(Path(args.train))
+    max_skills = args.max_skills or (20 if args.task == "skills_only" else 10)
+    rows = _read_training_rows(
+        Path(args.train),
+        task=args.task,
+        max_skills=max_skills,
+        evidence_per_skill=args.evidence_per_skill,
+    )
     dataset = Dataset.from_list(rows)
 
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)

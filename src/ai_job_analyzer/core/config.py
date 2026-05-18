@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     qwen_device_map: str = "auto"
     qwen_torch_dtype: Literal["auto", "float16", "bfloat16", "float32"] = "auto"
     qwen_max_new_tokens: int = 900
+    qwen_extraction_task: Literal["full_analysis", "skills_only"] = "full_analysis"
     qwen_service_host: str = "127.0.0.1"
     qwen_service_port: int = 8010
     qwen_service_url: str = "http://127.0.0.1:8010"

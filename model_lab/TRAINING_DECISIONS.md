@@ -223,3 +223,45 @@ Interpretation:
 - The compact QLoRA adapter improves over base Qwen under both exact and
   semantic evaluation, but it still has lower recall than GPT-5 mini and a
   strict-schema failure rate of `24 / 299`.
+
+
+## Skills-Only Qwen Adapter
+
+Current run:
+
+`model_lab/models/qwen3-1_7b-skill-extractor-qlora-r16a32-skills-only`
+
+Decision:
+
+- Simplify the small Qwen adapter task to skills-only extraction.
+- Require only one top-level JSON key during Qwen inference: `top_skills`.
+- Move `summary`, `core_responsibilities`, and final `nice_to_have`
+  synthesis to the low-volume finalizer stage.
+- Train on the canonicalized training split:
+  `model_lab/data/canonicalized/eval/train.jsonl`.
+
+Rationale:
+
+- The previous compact adapter showed that the 1.7B model can extract faithful
+  skills, but the full four-field output is too brittle for strict production
+  evaluation.
+- Skills are the high-volume, per-JD task where local Qwen saves cost and
+  latency. Summary/responsibility synthesis is a lower-volume aggregation task
+  and is a better fit for the configured finalizer.
+- Training on canonicalized labels teaches the adapter stable skill names
+  rather than forcing downstream code to repair as many naming variants.
+- The hyperparameters stay the same as the compact run (`r=16`, `alpha=32`,
+  dropout `0.05`, learning rate `2e-4`, 2 epochs) so the experiment isolates
+  the task simplification instead of mixing in a hyperparameter search.
+- `max_skills=20` is used to improve recall. Evidence is capped at one short
+  snippet per skill so outputs stay compact and JSON completion is more likely.
+
+Business pipeline decision:
+
+- With `QWEN_EXTRACTION_TASK=skills_only`, Qwen extracts per-posting skills.
+- The application then merges skill candidates, applies final skill
+  canonicalization, and asks the finalizer to generate summary/responsibility
+  fields from aggregated skills plus compact responsibility/nice-to-have
+  candidates extracted from the postings.
+- This keeps the app output complete without sending all raw job descriptions
+  to the finalizer for large batches.

@@ -52,6 +52,10 @@ model as a separate service with `LLM_PROVIDER=qwen_service`; see
 [`model_lab/README.md`](model_lab/README.md). In hybrid mode, Qwen handles the
 high-volume per-JD skill extraction while `FINALIZER_PROVIDER=openai` lets a
 stronger OpenAI model canonicalize skill synonyms and write the final summary.
+For small local Qwen adapters, `QWEN_EXTRACTION_TASK=skills_only` is the
+recommended mode: Qwen extracts only `top_skills` from each JD, then the
+finalizer synthesizes summary and responsibilities from aggregated skills plus
+compact evidence candidates.
 Without a configured provider the pipeline silently falls back to a
 keyword-frequency heuristic so analysis always returns something.
 
@@ -127,6 +131,19 @@ Then fine-tune with QLoRA:
 uv run python model_lab/scripts/finetune_qwen_lora.py \
   --train model_lab/data/qwen_skill_train.generated.jsonl \
   --output model_lab/models/qwen-job-keyword-lora
+```
+
+For the current small-model path, train a skills-only adapter on canonicalized
+labels:
+
+```bash
+uv run python model_lab/scripts/finetune_qwen_lora.py \
+  --train model_lab/data/canonicalized/eval/train.jsonl \
+  --output model_lab/models/qwen3-1_7b-skill-extractor-qlora-r16a32-skills-only \
+  --base-model Qwen/Qwen3-1.7B \
+  --task skills_only \
+  --max-skills 20 \
+  --evidence-per-skill 1
 ```
 
 To prove QLoRA helps, use the model-lab eval harness to compare pure

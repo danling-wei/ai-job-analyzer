@@ -235,6 +235,15 @@ class _LLMOutput(BaseModel):
     )
 
 
+class _SkillsOnlyOutput(BaseModel):
+    """Compact output for small local Qwen adapters that only extract skills."""
+
+    top_skills: list[_LLMSkill] = Field(
+        default_factory=list,
+        description="Supported concrete skills, ordered by importance, max 20.",
+    )
+
+
 class _SynthesisOutput(BaseModel):
     """Final cross-posting narrative output."""
 
@@ -408,6 +417,109 @@ def _format_postings(postings: list[JobPosting], *, max_chars: int = 2500) -> st
     return "\n\n---\n\n".join(chunks)
 
 
+_RESPONSIBILITY_MARKERS = (
+    "responsibilities",
+    "responsible for",
+    "you will",
+    "you'll",
+    "duties",
+    "build ",
+    "design ",
+    "develop ",
+    "implement ",
+    "manage ",
+    "lead ",
+    "own ",
+    "drive ",
+    "create ",
+    "maintain ",
+    "support ",
+    "coordinate ",
+    "collaborate ",
+    "analyze ",
+    "optimize ",
+    "deliver ",
+)
+
+_NICE_TO_HAVE_MARKERS = (
+    "preferred",
+    "nice to have",
+    "nice-to-have",
+    "bonus",
+    "plus",
+    "ideal candidate",
+)
+
+
+def _sentence_candidates_from_postings(
+    postings: list[JobPosting],
+    *,
+    markers: Sequence[str],
+    limit: int,
+    max_chars: int,
+) -> list[str]:
+    """Extract compact cross-posting evidence for final synthesis.
+
+    This keeps finalization bounded when the app analyses dozens of postings.
+    """
+    counter: Counter[str] = Counter()
+    examples: dict[str, str] = {}
+    for posting in postings:
+        text = re.sub(r"\s+", " ", posting.description.strip())
+        for sentence in re.split(r"(?<=[.!?])\s+|(?<=:)\s+|[\n\r]+", text):
+            cleaned = re.sub(r"^[\-*\d.)\s]+", "", sentence).strip()
+            if not cleaned:
+                continue
+            if len(cleaned) > max_chars:
+                cleaned = cleaned[: max_chars - 3].rstrip() + "..."
+            lower = cleaned.lower()
+            if not any(marker in lower for marker in markers):
+                continue
+            key = re.sub(r"[^a-z0-9]+", " ", lower).strip()
+            if not key:
+                continue
+            counter[key] += 1
+            examples.setdefault(key, cleaned)
+    ranked = sorted(counter, key=lambda key: (-counter[key], len(examples[key])))
+    return [examples[key] for key in ranked[:limit]]
+
+
+def _source_summary_for_synthesis(postings: list[JobPosting], *, limit: int = 20) -> str:
+    lines = []
+    for posting in postings[:limit]:
+        company = posting.company or "Unknown"
+        location = posting.location or "n/a"
+        lines.append(f"- {posting.title} @ {company} ({location})")
+    return "\n".join(lines)
+
+
+def _synthesis_context(
+    postings: list[JobPosting],
+    *,
+    nice_to_have: Sequence[str],
+) -> tuple[str, str, str]:
+    responsibilities = _sentence_candidates_from_postings(
+        postings,
+        markers=_RESPONSIBILITY_MARKERS,
+        limit=45,
+        max_chars=220,
+    )
+    inferred_nice_to_have = _sentence_candidates_from_postings(
+        postings,
+        markers=_NICE_TO_HAVE_MARKERS,
+        limit=20,
+        max_chars=180,
+    )
+    nice_candidates: list[str] = []
+    _unique_extend(nice_candidates, nice_to_have, limit=20)
+    _unique_extend(nice_candidates, inferred_nice_to_have, limit=20)
+    return (
+        "\n".join(f"- {item}" for item in responsibilities),
+        "\n".join(f"- {item}" for item in nice_candidates),
+        _source_summary_for_synthesis(postings),
+    )
+
+
 def _messages_for_postings(postings: list[JobPosting], job_title: str) -> list[tuple[str, str]]:
     user_prompt = (
         f"Target role: {job_title}\n\n"
@@ -462,6 +574,55 @@ def _build_result_from_output(
         core_responsibilities=output.core_responsibilities[:10],
         nice_to_have=_clean_nice_to_have(output.nice_to_have),
         summary=output.summary,
+        postings=postings,
+    )
+
+
+def _build_result_from_skills_only_output(
+    output: _SkillsOnlyOutput,
+    postings: list[JobPosting],
+    job_title: str,
+) -> AnalysisResult:
+    postings_text = "\n".join(posting.description for posting in postings).lower()
+    stack_skills = [
+        skill
+        for skill in output.top_skills
+        if _is_role_relevant_skill(skill) and _skill_supported_by_postings(skill, postings_text)
+    ]
+
+    skill_freq: Counter[str] = Counter()
+    for posting in postings:
+        for skill in stack_skills:
+            skill_freq[skill.name] += _count_skill_mentions(posting.description, skill.name)
+
+    top_skills = [
+        SkillInsight(
+            name=skill.name,
+            category=skill.category,
+            frequency=max(1, skill_freq.get(skill.name, 1)),
+            importance=skill.importance,
+            evidence=skill.evidence[:1],
+        )
+        for skill in stack_skills[:20]
+    ]
+    top_skills.sort(key=lambda skill: (-skill.frequency, -skill.importance, skill.name.lower()))
+
+    return AnalysisResult(
+        request=AnalysisRequest(
+            job_title=job_title,
+            location=None,
+            sources=None,
+            max_per_source=None,
+            language="auto",
+        ),
+        postings_analysed=len(postings),
+        top_skills=top_skills,
+        core_responsibilities=[],
+        nice_to_have=[],
+        summary=(
+            "Skills-only Qwen extraction. Final summary and responsibilities "
+            "should be produced by the configured finalizer."
+        ),
         postings=postings,
     )
 
@@ -877,31 +1038,57 @@ class QwenLoRAExtractor:
             return await MockExtractor().extract(postings, job_title)
 
         messages = _messages_for_postings(postings, job_title)
-        messages.append(
-            (
-                "human",
-                "Return only one valid JSON object. Do not think step by step. "
-                "Do not include <think> tags. Do not wrap it in markdown. "
-                "Do not return a JSON schema. Use exactly these top-level keys: "
-                "top_skills, core_responsibilities, nice_to_have, summary. "
-                "Each top_skills item must have: name, category, importance, evidence. "
-                "Return at most 10 top_skills. Each skill evidence array must contain "
-                "at most 1 short verbatim snippet. "
-                "Only include skills directly supported by the posting text. "
-                "Do not add software-engineering skills to non-software roles "
-                "unless those exact skills appear in the posting. "
-                "For every role, extract the concrete tools, methods, standards, "
-                "platforms, workflows, and domain techniques supported by the posting. "
-                'Example: {"top_skills":[{"name":"RAG","category":"domain",'
-                '"importance":0.9,"evidence":["Build RAG systems"]}],'
-                '"core_responsibilities":["Build applied AI features."],'
-                '"nice_to_have":["LoRA fine-tuning"],'
-                '"summary":"This role focuses on applied AI systems."}',
-            )
+        extraction_task = (
+            self.settings.qwen_extraction_task if hasattr(self, "settings") else "full_analysis"
         )
+        if extraction_task == "skills_only":
+            messages.append(
+                (
+                    "human",
+                    "Return only one valid JSON object. Do not think step by step. "
+                    "Do not include <think> tags. Do not wrap it in markdown. "
+                    "Do not return a JSON schema. Use exactly one top-level key: top_skills. "
+                    "Each top_skills item must have: name, category, importance, evidence. "
+                    "Return up to 20 top_skills. Extract all concrete supported tools, "
+                    "platforms, frameworks, languages, methods, standards, workflows, "
+                    "and role-specific domains. Each skill evidence array must contain "
+                    "at most 1 short verbatim snippet. Only include skills directly "
+                    "supported by the posting text. "
+                    'Example: {"top_skills":[{"name":"RAG","category":"domain",'
+                    '"importance":0.9,"evidence":["Build RAG systems"]}]}',
+                )
+            )
+        else:
+            messages.append(
+                (
+                    "human",
+                    "Return only one valid JSON object. Do not think step by step. "
+                    "Do not include <think> tags. Do not wrap it in markdown. "
+                    "Do not return a JSON schema. Use exactly these top-level keys: "
+                    "top_skills, core_responsibilities, nice_to_have, summary. "
+                    "Each top_skills item must have: name, category, importance, evidence. "
+                    "Return at most 10 top_skills. Each skill evidence array must contain "
+                    "at most 1 short verbatim snippet. "
+                    "Only include skills directly supported by the posting text. "
+                    "Do not add software-engineering skills to non-software roles "
+                    "unless those exact skills appear in the posting. "
+                    "For every role, extract the concrete tools, methods, standards, "
+                    "platforms, workflows, and domain techniques supported by the posting. "
+                    'Example: {"top_skills":[{"name":"RAG","category":"domain",'
+                    '"importance":0.9,"evidence":["Build RAG systems"]}],'
+                    '"core_responsibilities":["Build applied AI features."],'
+                    '"nice_to_have":["LoRA fine-tuning"],'
+                    '"summary":"This role focuses on applied AI systems."}',
+                )
+            )
         try:
             response_text = await asyncio.to_thread(self._invoke, messages)
             raw_json = _extract_json_object(response_text)
+            if extraction_task == "skills_only":
+                skills_output = _SkillsOnlyOutput.model_validate_json(
+                    _normalise_llm_payload(raw_json)
+                )
+                return _build_result_from_skills_only_output(skills_output, postings, job_title)
             output = _LLMOutput.model_validate_json(_normalise_llm_payload(raw_json))
         except Exception as exc:
             logger.exception("Qwen LoRA extraction failed: {}", exc)
@@ -920,19 +1107,22 @@ class QwenLoRAExtractor:
             f"- {skill.name} ({skill.category}, frequency={skill.frequency}, importance={skill.importance:.2f})"
             for skill in top_skills[:15]
         )
-        posting_text = _format_postings(postings, max_chars=900)
+        responsibilities_text, nice_text, source_text = _synthesis_context(
+            postings,
+            nice_to_have=nice_to_have,
+        )
         prompt = (
             "Return only one valid JSON object. Do not write Markdown headings, "
             "bullets outside JSON, or explanatory text.\n\n"
             f"Target role: {job_title}\n\n"
             f"Aggregated top skills:\n{skills_text or '- none'}\n\n"
-            f"Nice-to-have candidates:\n"
-            + "\n".join(f"- {item}" for item in nice_to_have[:20])
-            + "\n\n"
-            f"Source postings:\n{posting_text}\n\n"
+            f"Responsibility candidates extracted from postings:\n"
+            f"{responsibilities_text or '- none'}\n\n"
+            f"Nice-to-have candidates:\n{nice_text or '- none'}\n\n"
+            f"Source posting titles:\n{source_text or '- none'}\n\n"
             "Write a consolidated job-market analysis for a job seeker. "
             "Do not write one sentence per posting. Merge repeated ideas. "
-            "Use only information supported by the postings or aggregated skills. "
+            "Use only information supported by the provided candidates or aggregated skills. "
             "Return only one valid JSON object with exactly these keys: "
             "summary, core_responsibilities, nice_to_have. "
             "summary must be one cohesive paragraph of 3-5 sentences. "
@@ -1057,22 +1247,26 @@ class OpenAIFinalizer:
             f"- {skill.name} ({skill.category}, frequency={skill.frequency}, importance={skill.importance:.2f})"
             for skill in top_skills[:15]
         )
-        posting_text = _format_postings(postings, max_chars=700)
-        nice_text = "\n".join(f"- {item}" for item in nice_to_have[:20])
+        responsibilities_text, nice_text, source_text = _synthesis_context(
+            postings,
+            nice_to_have=nice_to_have,
+        )
         messages = [
             (
                 "system",
                 "You write concise final job-market analysis for job seekers. "
                 "Merge repeated ideas; do not write one sentence per posting. "
-                "Use only information supported by the provided postings and skills. "
+                "Use only information supported by the provided candidates and skills. "
                 "Return structured output only.",
             ),
             (
                 "human",
                 f"Target role: {job_title}\n\n"
                 f"Aggregated top skills:\n{skills_text or '- none'}\n\n"
+                f"Responsibility candidates extracted from postings:\n"
+                f"{responsibilities_text or '- none'}\n\n"
                 f"Nice-to-have candidates:\n{nice_text or '- none'}\n\n"
-                f"Source postings:\n{posting_text}\n\n"
+                f"Source posting titles:\n{source_text or '- none'}\n\n"
                 "Produce one cohesive 3-5 sentence summary, 6-10 deduplicated core "
                 "responsibilities, and explicit nice-to-have items only.",
             ),

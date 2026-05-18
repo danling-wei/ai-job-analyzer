@@ -187,6 +187,10 @@ non-streaming `POST /analyze`).
   `QWEN_ADAPTER_PATH`.
   The default base model is `Qwen/Qwen3-1.7B`; QLoRA training is the default path
   in `model_lab/scripts/finetune_qwen_lora.py`.
+  `QWEN_EXTRACTION_TASK=skills_only` is the recommended mode for small local
+  Qwen adapters: Qwen returns only `top_skills` per posting, while the finalizer
+  owns summary, core responsibility, and final nice-to-have synthesis from
+  aggregated skills plus compact responsibility/nice-to-have candidates.
   Evaluation scripts under `model_lab/scripts/` can split the generated dataset,
   run pure Qwen3 1.7B / GPT-5 mini / later QLoRA against the same test set, and
   render an HTML comparison report with skill precision, recall, F1, and a

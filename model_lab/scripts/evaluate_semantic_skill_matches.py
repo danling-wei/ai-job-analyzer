@@ -219,7 +219,19 @@ async def _judge_batch(
     parsed = json.loads(body)
     judgments = parsed["judgments"]
     by_id = {int(item["id"]): item for item in judgments}
-    return [by_id[index] for index in range(len(candidates))]
+    return [
+        by_id.get(
+            index,
+            {
+                "id": index,
+                "match": False,
+                "confidence": 0.0,
+                "relation": "missing_judgment",
+                "reason": "Judge response did not include this pair id.",
+            },
+        )
+        for index in range(len(candidates))
+    ]
 
 
 def _candidate_pairs_for_row(
